@@ -7,14 +7,14 @@ import crypto from "crypto";
 const prisma = new PrismaClient();
 // Set your secret key. Remember to switch to your live secret key in production.
 // See your keys here: https://dashboard.stripe.com/apikeys
-const stripe = new Stripe(
-);
+const stripe = new Stripe();
+stripe.key = process.env.STRIPE_SECRET_KEY;
 // const stripe = require("stripe")(
-//   
+//
 // );
 
 // Find your endpoint's secret in your Dashboard's webhook settings
-const endpointSecret =
+const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 // Using Express
 const app = express();
@@ -106,6 +106,30 @@ async function createUser(session) {
   }
   console.log("Expire Date", expire_date.toISOString());
 
+  const keygen_id = process.env(KEYGEN_ID)
+  // Make a request to Keygen.sh to generate a license based on customer email
+    try {
+      const response = await axios.post(
+        "https://api.keygen.sh/v1/accounts/your-account-id/licenses",
+        {
+          metadata: {
+            customerEmail: customerEmail,
+            // Add other necessary data for license generation
+          },
+        },
+        {
+          headers: {
+            Authorization: "Bearer your-keygen-api-key",
+          },
+        }
+      );
+
+      return response.data.data.attributes.key;
+    } catch (error) {
+      console.error("Error generating license:", error.message);
+      throw new Error("License Generation Failed");
+    }
+  }
   const user = await prisma.user.create({
     data: {
       login: name?.replace(" ", "_").toLowerCase() || "user",
