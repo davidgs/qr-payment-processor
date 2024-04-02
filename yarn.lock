@@ -458,6 +458,11 @@ js-cookie@^2.2.1:
   resolved "https://registry.yarnpkg.com/js-cookie/-/js-cookie-2.2.1.tgz#69e106dc5d5806894562902aa5baec3744e9b2b8"
   integrity sha512-HvdH2LzI/EAZcUwA8+0nKNtWHqS+ZmijLA30RwZA0bo7ToCckjK5MkGhjED9KoRcXO6BaGI3I9UIzSA1FKFPOQ==
 
+line-buffer@^0.1.4:
+  version "0.1.4"
+  resolved "https://registry.yarnpkg.com/line-buffer/-/line-buffer-0.1.4.tgz#e07de183310b60122fde4b335cf6606543ffb1d3"
+  integrity sha512-JAklY0PFT9JTtIMS/tpTRwByIVUo8jJLT4mTK43gl9mUZRDxz1F9UsOWySLk80+Oxo9KpwEEuO/z/Nk5k2IC2w==
+
 lodash.isequal@^4.5.0:
   version "4.5.0"
   resolved "https://registry.yarnpkg.com/lodash.isequal/-/lodash.isequal-4.5.0.tgz#415c4478f2bcc30120c22ce10ed3226f7d3e18e0"
@@ -510,6 +515,11 @@ negotiator@0.6.3:
   resolved "https://registry.yarnpkg.com/negotiator/-/negotiator-0.6.3.tgz#58e323a72fedc0d6f9cd4d31fe49f51479590ccd"
   integrity sha512-+EUsqGPLsM+j/zdChZjsnX51g4XrHFOIXwfnCVPGlQk/k5giakcKsuxCObBRu6DSm9opw/O6slWbJdghQM4bBg==
 
+nodemailer@^6.9.13:
+  version "6.9.13"
+  resolved "https://registry.yarnpkg.com/nodemailer/-/nodemailer-6.9.13.tgz#5b292bf1e92645f4852ca872c56a6ba6c4a3d3d6"
+  integrity sha512-7o38Yogx6krdoBf3jCAqnIN4oSQFx+fMa0I7dK1D+me9kBxx12D+/33wSb+fhOCtIxvYJ+4x4IMEhmhCKfAiOA==
+
 object-assign@^4:
   version "4.1.1"
   resolved "https://registry.yarnpkg.com/object-assign/-/object-assign-4.1.1.tgz#2109adc7965887cfc05cbbd442cac8bfbb360863"
@@ -527,6 +537,11 @@ on-finished@2.4.1:
   dependencies:
     ee-first "1.1.1"
 
+openssl@^2.0.0:
+  version "2.0.0"
+  resolved "https://registry.yarnpkg.com/openssl/-/openssl-2.0.0.tgz#7204cad363e83e0d7860da95dd0a0fc9d1d7a20c"
+  integrity sha512-0FgKhQ/e+XCtTTgn3qZO2g3y+Y3FC/LGvt77oObmMR4ZkZvsV1CuG/mMZClZgZqVKr0+tkemP+I3Uub4WXkHYw==
+
 parseurl@~1.3.3:
   version "1.3.3"
   resolved "https://registry.yarnpkg.com/parseurl/-/parseurl-1.3.3.tgz#9da19e7bee8d12dff0513ed5b76957793bc2e8d4"
@@ -543,6 +558,16 @@ prisma@^5.11.0:
   integrity sha512-KCLiug2cs0Je7kGkQBN9jDWoZ90ogE/kvZTUTgz2h94FEo8pczCkPH7fPNXkD1sGU7Yh65risGGD1HQ5DF3r3g==
   dependencies:
     "@prisma/engines" "5.11.0"
+
+promised-timeout@0.5.1:
+  version "0.5.1"
+  resolved "https://registry.yarnpkg.com/promised-timeout/-/promised-timeout-0.5.1.tgz#56bd98eb8c59e594dae85551bc54451cd4584c23"
+  integrity sha512-pil+5J1yOuH5jUp/Dk65OXGGOWLMSSQ00whNbQPbZXZTBlpr2a44hELj686WW6iB3cLiUALyeIQ2n3gpZiEK3w==
+
+promised-timeout@^0.2.0:
+  version "0.2.0"
+  resolved "https://registry.yarnpkg.com/promised-timeout/-/promised-timeout-0.2.0.tgz#45eafcf5ed9457e2e60efa77c2c860d6ef1d816e"
+  integrity sha512-GIFMiDI53g37wjxeh510DgtMDnkawWem/RWBuJlCglaWgdCAUPYvkMX+zTj1nP3fDVmyrWGRthivWHX/TZ5IKw==
 
 proxy-addr@~2.0.7:
   version "2.0.7"
@@ -672,6 +697,22 @@ side-channel@^1.0.4:
     call-bind "^1.0.0"
     get-intrinsic "^1.0.2"
     object-inspect "^1.9.0"
+
+smtp-channel@0.2.3:
+  version "0.2.3"
+  resolved "https://registry.yarnpkg.com/smtp-channel/-/smtp-channel-0.2.3.tgz#db660868ad3b5296775ec8078c38aa634c4dcda6"
+  integrity sha512-5PR7qW88Z6GcLfvgop6WpUMwNoJKKQY9CP8Gpk5INbSs3UtWqMgFYkTTMaynnbj+6e4D/L0JuagbuH3fjm4+Fw==
+  dependencies:
+    line-buffer "^0.1.4"
+    promised-timeout "^0.2.0"
+
+smtp-client@^0.4.0:
+  version "0.4.0"
+  resolved "https://registry.yarnpkg.com/smtp-client/-/smtp-client-0.4.0.tgz#2015da1f4d9821e67bf22ced01568b027d305245"
+  integrity sha512-TvxdX02b96hN6732TGkXcXHsaTeXgVMXjdAhYzz/pLGE6V1p/5jh1XYJa/PfE+O21jHLmwHYWVP3c7JNFWwmOg==
+  dependencies:
+    promised-timeout "0.5.1"
+    smtp-channel "0.2.3"
 
 statuses@2.0.1:
   version "2.0.1"

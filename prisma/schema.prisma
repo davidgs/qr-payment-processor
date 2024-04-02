@@ -17,8 +17,9 @@ datasource db {
 model User {
   id                           Int            @id @default(autoincrement())
   login                        String         @unique @db.VarChar(255)
-  stripe_id                     String?
+  stripe_id                    String?        @db.VarChar(255)
   userfront_id                 String?        @db.VarChar(255)
+  keygen_id                    String?        @db.VarChar(255)
   first_name                   String?
   last_name                    String?
   created_at                   DateTime       @default(now()) @db.Timestamp(6)
@@ -192,6 +193,7 @@ model Licensing {
   cust_id      String?   @db.VarChar(255)
   license_type String?    @default("free")
   license_key  String?    @db.VarChar(255)
+  license_status String?  @default("nolicense")
   active       Boolean?  @default(false)
   confirmed    Boolean?  @default(false)
   expire_date  DateTime?
@@ -316,37 +318,37 @@ model History {
   updated_at  DateTime? @db.Timestamp(6)
   deleted_at  DateTime? @db.Timestamp(6)
   user        User     @relation(fields: [history_id], references: [id])
-  utm_links   UTMLink[]
-  wifi_links  WiFiLink[]
+  utm_links   Json[]
+  wifi_links  Json[]
   history_id  Int @unique
 }
 
-model UTMLink {
-  id         Int      @id @default(autoincrement())
-  utm_target  String
-  utm_campaign String?
-  utm_source  String?
-  utm_medium  String?
-  utm_term    String?
-  utm_content String?
-  utm_keyword String?
-  long_link   String?
-  short_link  String?
-  uuid        String
-  link_id     Int     @unique
-  history     History @relation(fields: [link_id], references: [id])
-}
+// model UTMLink {
+//   id         Int      @id @default(autoincrement())
+//   utm_target  String @default("")
+//   utm_campaign String?
+//   utm_source  String?
+//   utm_medium  String?
+// //   utm_term    String?
+//   utm_content String?
+//   utm_keyword String?
+//   long_link   String?
+//   short_link  String?
+//   uuid        String?
+//   link_id     Int     @unique
+//   history     History @relation(fields: [link_id], references: [id])
+// }
 
-model WiFiLink {
-  id        Int      @id @default(autoincrement())
-  ssid      String
-  password  String
-  encryption enc_type
-  hidden    Boolean
-  uuid      String
-  link_id   Int
-  link_history History @relation(fields: [link_id], references: [id])
-}
+// model WiFiLink {
+//   id        Int      @id @default(autoincrement())
+//   ssid      String?
+//   password  String?
+//   encryption enc_type?
+//   hidden    Boolean?
+//   uuid      String?
+//   link_id   Int
+// //   link_history History @relation(fields: [link_id], references: [id])
+// }
 
 enum enc_type {
   nopass

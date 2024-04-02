@@ -5,11 +5,14 @@ import json from "body-parser";
 import crypto from "crypto";
 import axios from "axios";
 import cors from "cors";
+import { updateBitlySettings, updateMainSettings, updateQRSettings, updateUTMSettings, updateUserSettings, lookupUser, lookupUserByEmail, addUserToDatabase } from "./database.js";
+import { createUserfrontUser, findUserfrontUser } from "./userfrontActions.js";
+import { getMachine } from "./keygenActions.js";
+import { emailAccountDetails } from "./mailer.js";
 
 const prisma = new PrismaClient();
 // Set your secret key. Remember to switch to your live secret key in production.
 // See your keys here: https://dashboard.stripe.com/apikeys
-
 
 // stripe.Authorization = process.env.STRIPE_SECRET_KEY;
 // const stripe = require("stripe")(
@@ -22,50 +25,173 @@ const endpointSecret = process.env.STRIPE_ENDPOINT_SECRET;
 const KEYGEN_ACCOUNT_ID = process.env.KEYGEN_ACCOUNT_ID;
 const stripe_secret = process.env.STRIPE_SECRET_KEY;
 const KEYGEN_PRODUCT_TOKEN = process.env.KEYGEN_PRODUCT_TOKEN;
-if (!STRIPE_KEY || !endpointSecret || !KEYGEN_ACCOUNT_ID || !stripe_secret || !KEYGEN_PRODUCT_TOKEN) {
+
+if (
+  !STRIPE_KEY ||
+  !endpointSecret ||
+  !KEYGEN_ACCOUNT_ID ||
+  !stripe_secret ||
+  !KEYGEN_PRODUCT_TOKEN
+) {
   process.exit(1);
 }
 const stripe = new Stripe(STRIPE_KEY);
 stripe.key = process.env.STRIPE_KEY;
 // Using Express
 const app = express();
-app.use(json.json());
 app.use(cors());
-app.use(express.json({ limit: "10mb" }));
-app.use(
-  express.urlencoded({
-    limit: "10mb",
-    extended: true,
-  })
-);
+// app.use(express.json(
+//   {
+//     limit: "10mb"
+//   }));
+app.use(json.raw({ type: "*/*" }, { limit: "10mb" }));
 // Use body-parser to retrieve the raw body as a buffer
 
-const fulfillOrder = (session) => {
-  // TODO: fill me in
-  const lineItems = session.line_items;
-  console.log("Fulfilling order", lineItems);
+/**
+ * Fulfill the order once it's paid.
+ * @param {*} session
+ */
+async function fulfillOrder(session) {
   console.log("Fulfilling order", session);
-};
+  // get the line items from the session
+  const sess = await stripe.checkout.sessions.retrieve(session.id, {
+    expand: ["line_items"],
+  });
+  // get the subscription from the session
+  const subs = await stripe.checkout.sessions.retrieve(session.id, {
+    expand: ["subscription"],
+  });
+  // get the product id from the subscription
+  const prodID = subs.subscription.items.data[0].price.id;
+  console.log("Product ID: ", prodID);
+  // get the tag from the subscription
+  const tag = subs.subscription.items.data[0].price.lookup_key;
+  console.log("Tag: ", tag);
+  console.log("Subscriptions ", subs);
+  const lineItems = sess.line_items;
+  console.log("Line Items: ", lineItems);
+  // get the type of product
+  const type = lineItems.data[0].description;
+  // get the product id
+  const product = lineItems.data[0].price.product;
+  console.log("Type", type);
+  const sub_stat = subs.subscription.status;
+  console.log("Subscription Status", sub_stat);
+  let lic;
+  // check the product id and create a license based on the product
+  switch (product) {
+    case "prod_PTHZGmRKREYkk4": // qrcode basic
+      console.log(`Fulfilling order for ${type} ProductID: ${product}`);
+      lic = await createLicense(session, tag);
+      console.log("License: ", lic);
+      break;
+    case "prod_PTiLGOv1vWNLTE": // qrcode pro
+      console.log(`Fulfilling order ${type} ProductID: ${product}`);
+      lic = await createLicense(session, tag);
+      break;
+    case "prod_PVW8bgwnAdrsw2": // qrcode enterprise
+      console.log(`Fulfilling order for ${type} ProductID: ${product}`);
+      lic = await createLicense(session, tag);
+      break;
+    default:
+      console.log("Product not found");
+  }
+  // if a license was created, update the user with the license key
+  if (lic) {
+    console.log("License Generated", lic);
+    const username = `${session.customer_details.name
+      .toLowerCase()
+      .replace(" ", "_")}`;
+    const user = await lookupUserByEmail({
+      username: username,
+      email: session.customer_details.email,
+    });
+    // User is in the local database
+    if (user) {
+      console.log("User Found", user);
+      // Update user with license key
+      const updatedUser = await prisma.user.update({
+        where: {
+          login: username,
+        },
+        data: {
+          keygen_id: lic.data.relationships.account.data.id,
+          stripe_id: session.customer,
+          first_name: session.customer_details.name.split(" ")[0],
+          last_name: session.customer_details.name.split(" ")[1],
+          organization: "",
+          address: session.customer_details.address?.line_1 || "",
+          city: session.customer_details.address?.city || "",
+          state: session.customer_details.address?.state || "",
+          zip: session.customer_details.address?.postal_code || "",
+          licensing: {
+            upsert: {
+              create: {
+                cust_id: lic.data.relationships.account.data.id,
+                active: false,
+                confirmed: true,
+                license_key: lic.data.attributes.key,
+                license_type: tag,
+                license_status: sub_stat,
+                expire_date: lic.data.attributes.expiry,
+              },
+              update: {
+                cust_id: lic.data.relationships.account.data.id,
+                active: true,
+                confirmed: true,
+                license_key: lic.data.attributes.key,
+                license_type: tag,
+                license_status: sub_stat,
+                expire_date: lic.data.attributes.expiry,
+              },
+            },
+            update: {
+              cust_id: lic.data.relationships.account.data.id,
+              active: true,
+              confirmed: true,
+              license_key: lic.data.attributes.key,
+              license_type: tag,
+              license_status: sub_stat,
+              expire_date: lic.data.attributes.expiry,
+            },
+          },
+        },
+      });
+      // Send email to customer with license key
+      // Send email to customer with login details
+    } else {
+      // User is not in the local database
+      // see if they are in userfront
+      const uf = await findUserfrontUser({
+        username: username,
+        email: session.customer_details.email,
+      });
+      if (uf.totalCount === 0) {
+        console.log("Userfront User not Found", uf);
+        const f = await createUserfrontUser({
+          username: username,
+          email: session.customer_details.email,
+          name: session.customer_details.name,
+          address: session.customer_details.address?.line1 || "",
+          city: session.customer_details.address?.city || "",
+          state: session.customer_details.address?.state || "",
+          postalCode: session.customer_details.address?.postal_code || "",
+        });
+        console.log("Userfront User Created", f);
+      }
+        // Create user in database
+      const newUser = await addUserToDatabase(session);
+        // console.log("User Not Found");
+    }
+  }
+}
 
 const createOrder = (session) => {
   // TODO: fill me in
   console.log("Creating order", session);
 };
 
-/**
- * generate a random 10-character password string
- * @returns
- */
-function generatePass() {
-  let pass = "";
-  const str =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
-    "abcdefghijklmnopqrstuvwxyz0123456789@#$-_&*!%?";
-  for (let i = 1; i <= 10; i++) {
-    pass += str.charAt(Math.floor(Math.random() * str.length + 1));
-  }
-  return pass;
-}
+
 
 /**
  * Create a license from keygen.sh
@@ -94,9 +220,11 @@ async function createLicense(session, prod_type) {
       break;
     case "enterprise-monthly":
       lic_type = "prod_5";
+      policy_id = "3bae2503-078b-4e3f-a0ef-8d145074d65e";
       break;
     case "enterprise-yearly":
       lic_type = "prod_6";
+      policy_id = "5744fcdf-8b87-4cbf-89a5-47d313ba7bff";
       break;
     default:
       lic_type = "prod_7";
@@ -129,318 +257,26 @@ async function createLicense(session, prod_type) {
       }
     );
     console.log("License Generated", response.data.data.attributes.key);
-    return response.data.data.attributes.key;
+    return response.data;
   } catch (error) {
     console.error("Error generating license:", error.message);
     throw new Error("License Generation Failed");
   }
 }
 
-/**
- *
- * @param {*} username
- * @returns
- */
-async function findUser(username) {
-  const exists = await prisma.user
-    .findUnique({
-      where: {
-        login: username,
-      },
-    })
-    .then((exists) => {
-      console.log("User Exists", exists);
-    })
-    .catch((error) => console.log("Error: ", error));
-  return exists;
-}
-/**
- *
- * @param {*} session
- */
-async function addUserToDatabase(session) {
-  let localUserExists = false;
-  const exists = await prisma.user
-    .findUnique({
-      where: {
-        login: session.customer,
-      },
-    })
-    .then((exists) => {
-      if (exists) {
-        localUserExists = true;
-        console.log("User Exists", exists);
-      } else {
-        console.log("User Does Not Exist");
-      }
-    })
-    .catch((error) => console.log("Error: ", error));
-  const payload = {
-    order: "lastActiveAt_ASC",
-    page: 1,
-    filters: {
-      conjunction: "and",
-      filterGroups: [
-        {
-          conjunction: "and",
-          filters: [
-            {
-              attr: "username",
-              type: "string",
-              comparison: "is",
-              value: session.customer,
-            },
-          ],
-        },
-      ],
-    },
-  };
-  let userfrontUser = false;
-  let userfrontData = {};
-  await fetch("https://api.userfront.com/v0/tenants/xbp876mb/users/find", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization:
-        "Bearer uf_test_admin_xbp876mb_1ff44b31e3c9c0fd2bd50330641cb907",
-    },
-    body: JSON.stringify(payload),
-  })
-    .then((response) => response.json())
-    .then((data) => {
-      console.log("Got: ", data);
-      if (data.totalCount === 0) {
-        console.log("No user found");
-      } else if (data.totalCount === 1) {
-        userfrontUser = true;
-        console.log("User found");
-        userfrontData = data.results[0];
-      } else {
-        // Whiskey Tango Foxtrot
-        console.log("Users found: ", data.totalCount);
-      }
-    })
-    .catch((error) => console.log("Error: ", error));
-  if (!userfrontUser) {
-    // create a new userfront user
-    console.log("Creating Userfront User");
-  }
-  if (!localUserExists) {
-    // create a new user in the database
-    console.log("Creating Local User");
-  } else {
-    console.log("User Exists");
-    // update user record in database
-  }
-  if (exists) {
-    console.log("User Exists", exists);
-    const userfront = exists.userfront;
-    console.log("User Exists", userfront);
-    if (!userfront) {
-      const password = generatePass();
-      console.log("No Userfront Account Exists", userfront);
-      // Userfront.signup({
-      //   method: "password",
-      //   email: email,
-      //   password: password,
-      //   username: realName?.replace(" ", "_").toLowerCase(),
-      //   name: realName,
-      //   data: { license: lic_type, license: response },
-      //   // redirect: "/custom-path"
-      // });
-      // create userfront account
-    }
-  }
-  if (!exists) {
-    const user = await prisma.user
-      .create({
-        data: {
-          login: session.customer,
-          stripe_id: generatePass(),
-          first_name: session.customer_details.name.split(" ")[0],
-          last_name: session.customer_details.name.split(" ")[1],
-          organization: "",
-          address: session.customer_details.address.line_1,
-          city: session.customer_details.address.city,
-          state: session.customer_details.address.state,
-          zip: session.customer_details.address.postal_code,
-          email: session.customer_details.email,
-          active: true,
-          confirmed: true,
-          licensing: {
-            create: {
-              cust_id: session.customer,
-              active: false,
-              confirmed: true,
-              license_key: session.lic_key || "",
-              license_type: session.prod_type || "free",
-              expire_date: session.expire_date,
-            },
-          },
-          main_settings: {
-            create: {
-              brand_image: "",
-              brand_height: 200,
-              brand_width: 200,
-              brand_opacity: 1.0,
-              form_type: "simple",
-              dark: false,
-            },
-          },
-          bitly_settings: {
-            create: {
-              use_value: false,
-              label: "Shorten Link",
-              aria_label: "Shorten Link with Bitly",
-              tooltip: "Shorten Link with Bitly",
-              error: "No Bitly Token Found",
-              bitly_token: "",
-              bitly_domain: "",
-              bitly_addr: "https://api-ssl.bitly.com/v4/shorten",
-              bitly_enabled: false,
-              type: "bitly",
-            },
-          },
-          utm_campaign: {
-            create: {
-              use_value: true,
-              is_chooser: false,
-              show_name: true,
-              label: "Campaign",
-              tooltip: "Enter a campaign name",
-              error: "Please enter a valid campaign name",
-              aria_label: "Campaign Name",
-              value: [],
-            },
-          },
-          utm_keyword: {
-            create: {
-              use_value: true,
-              is_chooser: false,
-              show_name: true,
-              label: "Keywords",
-              tooltip: "Additional keywords to append to the link",
-              error: "Please enter a valid Keyword",
-              aria_label: "Add any additional keywords",
-              value: [],
-            },
-          },
-          utm_content: {
-            create: {
-              use_value: true,
-              is_chooser: false,
-              show_name: true,
-              label: "Content",
-              tooltip: "Additional content to append to the link",
-              error: "Please enter a valid content value",
-              aria_label: "Add any additional content",
-              value: [],
-            },
-          },
-          utm_medium: {
-            create: {
-              use_value: true,
-              is_chooser: false,
-              show_name: true,
-              label: "Referral Medium",
-              tooltip:
-                "What kind of referral link is this? This is usually how you're distributing the link.",
-              error: "Please choose a valid referral medium",
-              aria_label: "Referral medium",
-              value: [
-                { key: "cpc", value: "Cost Per Click" },
-                { key: "direct", value: "Direct" },
-                { key: "display", value: "Display" },
-                { key: "email", value: "Email" },
-                { key: "event", value: "Event" },
-                { key: "organic", value: "Organic" },
-                { key: "paid-search", value: "Paid Search" },
-                { key: "paid-social", value: "Paid Social" },
-                { key: "qr", value: "QR Code" },
-                { key: "referral", value: "Referral" },
-                { key: "retargeting", value: "Retargeting" },
-                { key: "social", value: "Social" },
-                { key: "ppc", value: "Pay Per Click" },
-                { key: "linq", value: "Linq" },
-              ],
-            },
-          },
-          utm_source: {
-            create: {
-              use_value: true,
-              is_chooser: false,
-              show_name: true,
-              label: "Referral Source",
-              tooltip: "Where will you be posting this link?",
-              error: "Please enter a valid referral source",
-              aria_label: "Referral Source",
-              value: [],
-            },
-          },
-          utm_target: {
-            create: {
-              use_value: true,
-              is_chooser: false,
-              show_name: true,
-              label: "URL to encode",
-              tooltip: "Complete URL to encode",
-              error: "Please enter a valid URL",
-              aria_label: "This must be a valid URL",
-              value: [],
-            },
-          },
-          utm_term: {
-            create: {
-              use_value: true,
-              is_chooser: false,
-              show_name: true,
-              label: "Referral Term",
-              tooltip: "Enter a referral term",
-              error: "Please enter a valid referral term",
-              aria_label: "Referral Term",
-              value: [],
-            },
-          },
-          qr_settings: {
-            create: {
-              value: "",
-              ec_level: "M",
-              enable_CORS: true,
-              size: 220,
-              quiet_zone: 10,
-              bg_color: "rgba(255,255,255,1)",
-              fg_color: "rgba(0,0,0,1)",
-              logo_image: "",
-              logo_width: 60,
-              logo_height: 60,
-              logo_opacity: 1.0,
-              remove_qr_code_behind_logo: true,
-              logo_padding: 0,
-              logo_padding_style: "square",
-              top_l_eye_radius: [0, 0, 0, 0],
-              top_r_eye_radius: [0, 0, 0, 0],
-              bottom_l_eye_radius: [0, 0, 0, 0],
-              eye_color: "rgba(0,0,0,1)",
-              qr_style: "squares",
-              qr_type: "png",
-              x_parent: false,
-            },
-          },
-        },
-        // send email with username/password and license key
-      })
-      .then(async () => {
-        await prisma.$disconnect();
-      })
-      .catch(async (e) => {
-        console.error(e);
-        await prisma.$disconnect();
-        process.exit(1);
-      });
+const emailCustomerAboutFailedPayment = (session) => {
+  // TODO: fill me in
+  console.log("Emailing customer", session);
+};
 
-    console.log("User Created", user);
-  }
-}
+/**
+ * Email the customer with their login details
+ */
+const emailCustomerLoginDetails = (session) => {
+  // TODO: fill me in
+  console.log("Emailing customer", session);
+};
+
 /**
  * Create a user in the database
  * @param {*} session
@@ -448,12 +284,11 @@ async function addUserToDatabase(session) {
  * @throws
  **/
 async function gatherCustomerData(session) {
-  const userName = session.customer;
-  console.log("Creating user", userName);
   const email = session.customer_details?.email;
   console.log("Creating user", email);
   const realName = session.customer_details?.name;
   const login = realName?.replace(" ", "_").toLowerCase();
+  console.log(`Creating user username: ${login}`);
   console.log("Creating user", realName);
   const address = session.customer_details?.address?.line1 || "";
   const line2 = session.customer_details?.address?.line2;
@@ -463,7 +298,6 @@ async function gatherCustomerData(session) {
     console.log("Creating user", address);
   }
   let uuid = crypto.randomUUID();
-  const lic_key = uuid;
   const city = session.customer_details?.address?.city;
   console.log("Creating user", city);
   const state = session.customer_details?.address?.state;
@@ -484,38 +318,32 @@ async function gatherCustomerData(session) {
   switch (price) {
     case "price_1OekvpGuKQxVPasTP3VLQsTe":
       prod_type = "pro-yearly";
-      expire_date.setFullYear(expire_date.getFullYear() + 1);
       break;
     case "price_1OekuNGuKQxVPasTpZJ3KLOV":
       prod_type = "pro-monthly";
-      expire_date.setMonth(expire_date.getMonth() + 1);
       break;
     case "price_1OektqGuKQxVPasTR1ST3vFq":
       prod_type = "basic-yearly";
-      expire_date.setFullYear(expire_date.getFullYear() + 1);
       break;
     case "price_1OeL09GuKQxVPasTvM0wugbM":
       prod_type = "basic-monthly";
-      expire_date.setMonth(expire_date.getMonth() + 1);
       break;
     case "price_1OgV5rGuKQxVPasT044gOB4u":
       prod_type = "enterprise-monthly";
-      expire_date.setMonth(expire_date.getMonth() + 1);
       break;
     case "price_1OgV6OGuKQxVPasTNpLMEMFS":
       prod_type = "enterprise-yearly";
-      expire_date.setMonth(expire_date.getFullYear() + 1);
       break;
     default:
-      prod_type = "basic-trial";
+      prod_type = "free";
   }
-  console.log("Expire Date", expire_date.toISOString());
 
   // Make a request to Keygen.sh to generate a license based on customer email
   const response = await createLicense(session, prod_type);
 
   console.log(`Response: ${response}`);
   const see_obj = {
+    username: login,
     customer: userName,
     customer_details: {
       email: email,
@@ -536,723 +364,211 @@ async function gatherCustomerData(session) {
   await addUserToDatabase(see_obj);
 }
 
-
-/**
- *
- * @param string payload
- * @returns
- */
-async function lookupUser(payload) {
-  console.log("Looking up user", payload);
-  const username = payload;
-  console.log("Looking up username", username);
-  let localUserExists = false;
-  const exists = await prisma.user
-    .findUnique({
-      relationLoadStrategy: "join",
-      include: {
-        licensing: true,
-        qr_settings: true,
-        main_settings: true,
-        bitly_settings: true,
-        utm_campaign: true,
-        utm_keyword: true,
-        utm_content: true,
-        utm_medium: true,
-        utm_source: true,
-        utm_target: true,
-        utm_term: true,
-      },
-      where: {
-        login: username,
-      },
+async function lookupUserFunc(payload) {
+  // see if user is already in Userfront
+  const f_data = await findUserfrontUser(payload)
+    .then((response) => {
+      console.log("Userfront search result", response);
+      if (response) {
+        console.log("Userfront User Found", response);
+        return response;
+      }
     })
-    .then((user) => {
-      localUserExists = true;
-      console.log("User Exists", user);
-      return user;
-    })
-    .catch((error) => {
-      console.log("Error: ", error);
-      return error;
+    .catch(async (e) => {
+      console.error(e);
+      resp.status(500).end();
+      return null;
     });
-  if (localUserExists) {
-    return exists;
+  console.log("Userfront search result", f_data);
+  // if no Userfront user, create one.
+  let c_data
+  if (f_data.totalCount === 0) {
+    c_data = await createUserfrontUser(payload)
+      .then((response) => {
+        console.log("User Created", response);
+        return response;
+      })
+      .catch(async (e) => {
+        console.error(e);
+        resp.status(500).end();
+        return null;
+      });
+    console.log("User Created", c_data);
   }
-}
-
-/**
- * Update Bitly Settings in database
- */
-
-async function updateBitlySettings(payload) {
-  console.log("Updating Bitly Settings", payload);
-  const updateUser = await prisma.user
-    .update({
-      where: {
-        login: payload.username,
-      },
-      data: {
-        bitly_settings: {
-          upsert: {
-            create: {
-              use_value: payload.settings.use_value,
-              label: payload.settings.label,
-              aria_label: payload.settings.aria_label,
-              tooltip: payload.settings.tooltip,
-              error: payload.settings.error,
-              bitly_token: payload.settings.bitly_token,
-              bitly_domain: payload.settings.bitly_domain,
-              bitly_addr: payload.settings.bitly_addr,
-              bitly_enabled: payload.settings.bitly_enabled,
-              type: payload.settings.type,
-              updated_at: new Date(),
-            },
-            update: {
-              use_value: payload.settings.use_value,
-              label: payload.settings.label,
-              aria_label: payload.settings.aria_label,
-              tooltip: payload.settings.tooltip,
-              error: payload.settings.error,
-              bitly_token: payload.settings.bitly_token,
-              bitly_domain: payload.settings.bitly_domain,
-              bitly_addr: payload.settings.bitly_addr,
-              bitly_enabled: payload.settings.bitly_enabled,
-              type: payload.settings.type,
-              updated_at: new Date(),
-            },
-          },
-          update: {
-            use_value: payload.settings.use_value,
-            label: payload.settings.label,
-            aria_label: payload.settings.aria_label,
-            tooltip: payload.settings.tooltip,
-            error: payload.settings.error,
-            bitly_token: payload.settings.bitly_token,
-            bitly_domain: payload.settings.bitly_domain,
-            bitly_addr: payload.settings.bitly_addr,
-            bitly_enabled: payload.settings.bitly_enabled,
-            type: payload.settings.type,
-            updated_at: new Date(),
-          },
-        },
-      },
-      include: {
-        bitly_settings: true,
-      },
+  // see if user is in the database
+  const cd = await lookupUserByEmail(payload)
+    .then((response) => {
+      console.log("User Found", response);
+      return response;
     })
-    .then((user) => {
-      console.log("User Updated", user);
-      return user;
-    })
-    .catch((error) => {
-      console.log("Error: ", error);
-      return error;
+    .catch(async (e) => {
+      console.error(e);
+      resp.status(500).end();
+      return null;
     });
-  return updateUser;
-}
-/**
- * Update Main Settings in database
- * @param {*} payload
- */
-
-async function updateMainSettings(payload) {
-  console.log("Updating Main Settings", payload);
-  const updateUser = await prisma.user
-    .update({
-      where: {
-        login: payload.username,
-      },
-      data: {
-        main_settings: {
-          upsert: {
-            create: {
-              brand_image: payload.settings.settings.brand_image,
-              brand_height: payload.settings.settings.brand_height,
-              brand_width: payload.settings.settings.brand_width,
-              brand_opacity: payload.settings.settings.brand_opacity,
-              form_type: payload.settings.settings.form_type,
-              dark: payload.settings.dark,
-            },
-            update: {
-              brand_image: payload.settings.settings.brand_image,
-              brand_height: payload.settings.settings.brand_height,
-              brand_width: payload.settings.settings.brand_width,
-              brand_opacity: payload.settings.settings.brand_opacity,
-              form_type: payload.settings.settings.form_type,
-              dark: payload.settings.dark,
-            },
-          },
-          update: {
-            brand_image: payload.settings.settings.brand_image,
-            brand_height: payload.settings.settings.brand_height,
-            brand_width: payload.settings.settings.brand_width,
-            brand_opacity: payload.settings.settings.brand_opacity,
-            form_type: payload.settings.settings.form_type,
-            dark: payload.settings.dark,
-          },
+  console.log("User Found: ", cd);
+  // if no local user, create one
+  if (cd === null) {
+    const see_obj = {
+      username: payload.username,
+      customer: payload.name,
+      customer_details: {
+        email: payload.email,
+        name: payload.name,
+        address: {
+          line_1: "",
+          line_2: "",
+          city: "",
+          state: "",
+          postal_code: "",
         },
       },
-      include: {
-        main_settings: true,
-      },
-    })
-    .then((user) => {
-      console.log("User Updated", user);
-      return user;
-    })
-    .catch((error) => {
-      console.log("Error: ", error);
-      return error;
-    });
-  return updateUser;
+      lic_key: "",
+      prod_type: "free",
+      expire_date: "",
+      userfront_id: c_data.userUuid,
+    };
+    const newUser = await addUserToDatabase(see_obj)
+      .then(async () => {
+        await prisma.$disconnect();
+      })
+      .catch(async (e) => {
+        console.error(e);
+        await prisma.$disconnect();
+      });
+    console.log("User Created", newUser);
+  }
+  // email account details
+  emailAccountDetails(payload);
 }
 
 /**
- * Update Main Settings in database
- * @param {*} payload
- */
-
-async function updateUTMSettings(payload) {
-  console.log("Updating UTM Settings", payload);
-  const updateUser = await prisma.user
-    .update({
-      where: {
-        login: payload.username,
-      },
-      data: {
-        utm_target: {
-          upsert: {
-            create: {
-              use_value: payload.settings.settings.utm_target.use_value,
-              is_chooser: payload.settings.settings.utm_target.is_chooser,
-              show_name: payload.settings.settings.utm_target.show_name,
-              label: payload.settings.settings.utm_target.label,
-              tooltip: payload.settings.settings.utm_target.tooltip,
-              error: payload.settings.settings.utm_target.error,
-              aria_label: payload.settings.settings.utm_target.aria_label,
-              value: payload.settings.settings.utm_target.value,
-            },
-            update: {
-              use_value: payload.settings.settings.utm_target.use_value,
-              is_chooser: payload.settings.settings.utm_target.is_chooser,
-              show_name: payload.settings.settings.utm_target.show_name,
-              label: payload.settings.settings.utm_target.label,
-              tooltip: payload.settings.settings.utm_target.tooltip,
-              error: payload.settings.settings.utm_target.error,
-              aria_label: payload.settings.settings.utm_target.aria_label,
-              value: payload.settings.settings.utm_target.value,
-            },
-          },
-          update: {
-            use_value: payload.settings.settings.utm_target.use_value,
-            is_chooser: payload.settings.settings.utm_target.is_chooser,
-            show_name: payload.settings.settings.utm_target.show_name,
-            label: payload.settings.settings.utm_target.label,
-            tooltip: payload.settings.settings.utm_target.tooltip,
-            error: payload.settings.settings.utm_target.error,
-            aria_label: payload.settings.settings.utm_target.aria_label,
-            value: payload.settings.settings.utm_target.value,
-          },
-        },
-        utm_keyword: {
-          upsert: {
-            create: {
-              use_value: payload.settings.settings.utm_keyword.use_value,
-              is_chooser: payload.settings.settings.utm_keyword.is_chooser,
-              show_name: payload.settings.settings.utm_keyword.show_name,
-              label: payload.settings.settings.utm_keyword.label,
-              tooltip: payload.settings.settings.utm_keyword.tooltip,
-              error: payload.settings.settings.utm_keyword.error,
-              aria_label: payload.settings.settings.utm_keyword.aria_label,
-              value: payload.settings.settings.utm_keyword.value,
-            },
-            update: {
-              use_value: payload.settings.settings.utm_keyword.use_value,
-              is_chooser: payload.settings.settings.utm_keyword.is_chooser,
-              show_name: payload.settings.settings.utm_keyword.show_name,
-              label: payload.settings.settings.utm_keyword.label,
-              tooltip: payload.settings.settings.utm_keyword.tooltip,
-              error: payload.settings.settings.utm_keyword.error,
-              aria_label: payload.settings.settings.utm_keyword.aria_label,
-              value: payload.settings.settings.utm_keyword.value,
-            },
-          },
-          update: {
-            use_value: payload.settings.settings.utm_keyword.use_value,
-            is_chooser: payload.settings.settings.utm_keyword.is_chooser,
-            show_name: payload.settings.settings.utm_keyword.show_name,
-            label: payload.settings.settings.utm_keyword.label,
-            tooltip: payload.settings.settings.utm_keyword.tooltip,
-            error: payload.settings.settings.utm_keyword.error,
-            aria_label: payload.settings.settings.utm_keyword.aria_label,
-            value: payload.settings.settings.utm_keyword.value,
-          },
-        },
-        utm_content: {
-          upsert: {
-            create: {
-              use_value: payload.settings.settings.utm_content.use_value,
-              is_chooser: payload.settings.settings.utm_content.is_chooser,
-              show_name: payload.settings.settings.utm_content.show_name,
-              label: payload.settings.settings.utm_content.label,
-              tooltip: payload.settings.settings.utm_content.tooltip,
-              error: payload.settings.settings.utm_content.error,
-              aria_label: payload.settings.settings.utm_content.aria_label,
-              value: payload.settings.settings.utm_content.value,
-            },
-            update: {
-              use_value: payload.settings.settings.utm_content.use_value,
-              is_chooser: payload.settings.settings.utm_content.is_chooser,
-              show_name: payload.settings.settings.utm_content.show_name,
-              label: payload.settings.settings.utm_content.label,
-              tooltip: payload.settings.settings.utm_content.tooltip,
-              error: payload.settings.settings.utm_content.error,
-              aria_label: payload.settings.settings.utm_content.aria_label,
-              value: payload.settings.settings.utm_content.value,
-            },
-          },
-          update: {
-            use_value: payload.settings.settings.utm_content.use_value,
-            is_chooser: payload.settings.settings.utm_content.is_chooser,
-            show_name: payload.settings.settings.utm_content.show_name,
-            label: payload.settings.settings.utm_content.label,
-            tooltip: payload.settings.settings.utm_content.tooltip,
-            error: payload.settings.settings.utm_content.error,
-            aria_label: payload.settings.settings.utm_content.aria_label,
-            value: payload.settings.settings.utm_content.value,
-          },
-        },
-        utm_medium: {
-          upsert: {
-            create: {
-              use_value: payload.settings.settings.utm_medium.use_value,
-              is_chooser: payload.settings.settings.utm_medium.is_chooser,
-              show_name: payload.settings.settings.utm_medium.show_name,
-              label: payload.settings.settings.utm_medium.label,
-              tooltip: payload.settings.settings.utm_medium.tooltip,
-              error: payload.settings.settings.utm_medium.error,
-              aria_label: payload.settings.settings.utm_medium.aria_label,
-              value: payload.settings.settings.utm_medium.value,
-            },
-            update: {
-              use_value: payload.settings.settings.utm_medium.use_value,
-              is_chooser: payload.settings.settings.utm_medium.is_chooser,
-              show_name: payload.settings.settings.utm_medium.show_name,
-              label: payload.settings.settings.utm_medium.label,
-              tooltip: payload.settings.settings.utm_medium.tooltip,
-              error: payload.settings.settings.utm_medium.error,
-              aria_label: payload.settings.settings.utm_medium.aria_label,
-              value: payload.settings.settings.utm_medium.value,
-            },
-          },
-          update: {
-            use_value: payload.settings.settings.utm_medium.use_value,
-            is_chooser: payload.settings.settings.utm_medium.is_chooser,
-            show_name: payload.settings.settings.utm_medium.show_name,
-            label: payload.settings.settings.utm_medium.label,
-            tooltip: payload.settings.settings.utm_medium.tooltip,
-            error: payload.settings.settings.utm_medium.error,
-            aria_label: payload.settings.settings.utm_medium.aria_label,
-            value: payload.settings.settings.utm_medium.value,
-          },
-        },
-        utm_source: {
-          upsert: {
-            create: {
-              use_value: payload.settings.settings.utm_source.use_value,
-              is_chooser: payload.settings.settings.utm_source.is_chooser,
-              show_name: payload.settings.settings.utm_source.show_name,
-              label: payload.settings.settings.utm_source.label,
-              tooltip: payload.settings.settings.utm_source.tooltip,
-              error: payload.settings.settings.utm_source.error,
-              aria_label: payload.settings.settings.utm_source.aria_label,
-              value: payload.settings.settings.utm_source.value,
-            },
-            update: {
-              use_value: payload.settings.settings.utm_source.use_value,
-              is_chooser: payload.settings.settings.utm_source.is_chooser,
-              show_name: payload.settings.settings.utm_source.show_name,
-              label: payload.settings.settings.utm_source.label,
-              tooltip: payload.settings.settings.utm_source.tooltip,
-              error: payload.settings.settings.utm_source.error,
-              aria_label: payload.settings.settings.utm_source.aria_label,
-              value: payload.settings.settings.utm_source.value,
-            },
-          },
-          update: {
-            use_value: payload.settings.settings.utm_source.use_value,
-            is_chooser: payload.settings.settings.utm_source.is_chooser,
-            show_name: payload.settings.settings.utm_source.show_name,
-            label: payload.settings.settings.utm_source.label,
-            tooltip: payload.settings.settings.utm_source.tooltip,
-            error: payload.settings.settings.utm_source.error,
-            aria_label: payload.settings.settings.utm_source.aria_label,
-            value: payload.settings.settings.utm_source.value,
-          },
-        },
-        utm_term: {
-          upsert: {
-            create: {
-              use_value: payload.settings.settings.utm_term.use_value,
-              is_chooser: payload.settings.settings.utm_term.is_chooser,
-              show_name: payload.settings.settings.utm_term.show_name,
-              label: payload.settings.settings.utm_term.label,
-              tooltip: payload.settings.settings.utm_term.tooltip,
-              error: payload.settings.settings.utm_term.error,
-              aria_label: payload.settings.settings.utm_term.aria_label,
-              value: payload.settings.settings.utm_term.value,
-            },
-            update: {
-              use_value: payload.settings.settings.utm_term.use_value,
-              is_chooser: payload.settings.settings.utm_term.is_chooser,
-              show_name: payload.settings.settings.utm_term.show_name,
-              label: payload.settings.settings.utm_term.label,
-              tooltip: payload.settings.settings.utm_term.tooltip,
-              error: payload.settings.settings.utm_term.error,
-              aria_label: payload.settings.settings.utm_term.aria_label,
-              value: payload.settings.settings.utm_term.value,
-            },
-          },
-          update: {
-            use_value: payload.settings.settings.utm_term.use_value,
-            is_chooser: payload.settings.settings.utm_term.is_chooser,
-            show_name: payload.settings.settings.utm_term.show_name,
-            label: payload.settings.settings.utm_term.label,
-            tooltip: payload.settings.settings.utm_term.tooltip,
-            error: payload.settings.settings.utm_term.error,
-            aria_label: payload.settings.settings.utm_term.aria_label,
-            value: payload.settings.settings.utm_term.value,
-          },
-        },
-        utm_campaign: {
-          upsert: {
-            create: {
-              use_value: payload.settings.settings.utm_campaign.use_value,
-              is_chooser: payload.settings.settings.utm_campaign.is_chooser,
-              show_name: payload.settings.settings.utm_campaign.show_name,
-              label: payload.settings.settings.utm_campaign.label,
-              tooltip: payload.settings.settings.utm_campaign.tooltip,
-              error: payload.settings.settings.utm_campaign.error,
-              aria_label: payload.settings.settings.utm_campaign.aria_label,
-              value: payload.settings.settings.utm_campaign.value,
-            },
-            update: {
-              use_value: payload.settings.settings.utm_campaign.use_value,
-              is_chooser: payload.settings.settings.utm_campaign.is_chooser,
-              show_name: payload.settings.settings.utm_campaign.show_name,
-              label: payload.settings.settings.utm_campaign.label,
-              tooltip: payload.settings.settings.utm_campaign.tooltip,
-              error: payload.settings.settings.utm_campaign.error,
-              aria_label: payload.settings.settings.utm_campaign.aria_label,
-              value: payload.settings.settings.utm_campaign.value,
-            },
-          },
-          update: {
-            use_value: payload.settings.settings.utm_campaign.use_value,
-            is_chooser: payload.settings.settings.utm_campaign.is_chooser,
-            show_name: payload.settings.settings.utm_campaign.show_name,
-            label: payload.settings.settings.utm_campaign.label,
-            tooltip: payload.settings.settings.utm_campaign.tooltip,
-            error: payload.settings.settings.utm_campaign.error,
-            aria_label: payload.settings.settings.utm_campaign.aria_label,
-            value: payload.settings.settings.utm_campaign.value,
-          },
-        },
-      },
-      include: {
-        utm_target: true,
-        utm_keyword: true,
-        utm_content: true,
-        utm_medium: true,
-        utm_source: true,
-        utm_term: true,
-        utm_campaign: true,
-      },
-    })
-    .then((user) => {
-      console.log("User Updated", user);
-      return user;
-    })
-    .catch((error) => {
-      console.log("Error: ", error);
-      return error;
-    });
-  return updateUser;
-}
-
-/**
- * Update QR Settings in database
- */
-async function updateQRSettings(payload) {
-  console.log("Updating QR Settings", payload);
-  const updateUser = await prisma.user
-    .update({
-      where: {
-        login: payload.username,
-      },
-      data: {
-        qr_settings: {
-          upsert: {
-            create: {
-              value: payload.settings.value,
-              ec_level: payload.settings.ec_level,
-              enable_CORS: payload.settings.enable_CORS,
-              size: payload.settings.size,
-              quiet_zone: payload.settings.quiet_zone,
-              bg_color: payload.settings.bg_color,
-              fg_color: payload.settings.fg_color,
-              logo_image: payload.settings.logo_image,
-              logo_width: payload.settings.logo_width,
-              logo_height: payload.settings.logo_height,
-              logo_opacity: payload.settings.logo_opacity,
-              remove_qr_code_behind_logo: payload.settings.remove_qr_code_behind_logo,
-              logo_padding: payload.settings.logo_padding,
-              logo_padding_style: payload.settings.logo_padding_style,
-              top_l_eye_radius: payload.settings.top_l_eye_radius,
-              top_r_eye_radius: payload.settings.top_r_eye_radius,
-              bottom_l_eye_radius: payload.settings.bottom_l_eye_radius,
-              eye_color: payload.settings.eye_color,
-              qr_style: payload.settings.qr_style,
-              qr_type: payload.settings.qr_type,
-              x_parent: payload.settings.x_parent,
-            },
-            update: {
-              value: payload.settings.value,
-              ec_level: payload.settings.ec_level,
-              enable_CORS: payload.settings.enable_CORS,
-              size: payload.settings.size,
-              quiet_zone: payload.settings.quiet_zone,
-              bg_color: payload.settings.bg_color,
-              fg_color: payload.settings.fg_color,
-              logo_image: payload.settings.logo_image,
-              logo_width: payload.settings.logo_width,
-              logo_height: payload.settings.logo_height,
-              logo_opacity: payload.settings.logo_opacity,
-              remove_qr_code_behind_logo: payload.settings.remove_qr_code_behind_logo,
-              logo_padding: payload.settings.logo_padding,
-              logo_padding_style: payload.settings.logo_padding_style,
-              top_l_eye_radius: payload.settings.top_l_eye_radius,
-              top_r_eye_radius: payload.settings.top_r_eye_radius,
-              bottom_l_eye_radius: payload.settings.bottom_l_eye_radius,
-              eye_color: payload.settings.eye_color,
-              qr_style: payload.settings.qr_style,
-              qr_type: payload.settings.qr_type,
-              x_parent: payload.settings.x_parent,
-            },
-          },
-          update: {
-            value: payload.settings.value,
-            ec_level: payload.settings.ec_level,
-            enable_CORS: payload.settings.enable_CORS,
-            size: payload.settings.size,
-            quiet_zone: payload.settings.quiet_zone,
-            bg_color: payload.settings.bg_color,
-            fg_color: payload.settings.fg_color,
-            logo_image: payload.settings.logo_image,
-            logo_width: payload.settings.logo_width,
-            logo_height: payload.settings.logo_height,
-            logo_opacity: payload.settings.logo_opacity,
-            remove_qr_code_behind_logo: payload.settings.remove_qr_code_behind_logo,
-            logo_padding: payload.settings.logo_padding,
-            logo_padding_style: payload.settings.logo_padding_style,
-            top_l_eye_radius: payload.settings.top_l_eye_radius,
-            top_r_eye_radius: payload.settings.top_r_eye_radius,
-            bottom_l_eye_radius: payload.settings.bottom_l_eye_radius,
-            eye_color: payload.settings.eye_color,
-            qr_style: payload.settings.qr_style,
-            qr_type: payload.settings.qr_type,
-            x_parent: payload.settings.x_parent,
-          },
-        },
-      },
-      include: {
-        qr_settings: true,
-      },
-    })
-    .then((user) => {
-      console.log("User Updated", user);
-      return user;
-    })
-    .catch((error) => {
-      console.log("Error: ", error);
-      return error;
-    });
-  return updateUser;
-}
-
-/**
- * Find a user in the database
+ * Request to Find a user in the database /user-data
  * @param {*} username
  * @returns
  */
-app.post("/user-data", (req, resp) => {
-  const payload = req.body;
-  console.log("User Data", payload);
-  console.log("Data Fetch: ", payload.data_fetch);
-  // resp.status(200).end();
-  const data = lookupUser(payload.username);
-  data
-    .then((response) => {
-      console.log("/user-data/: User Data", response);
-      switch (payload.data_fetch) {
-        case "all":
-          resp.write(JSON.stringify(response));
-          resp.status(200).end();
-          break;
-        case "main_settings":
-          resp.write(JSON.stringify(response.main_settings));
-          resp.status(200).end();
-          break;
-        case "bitly_settings":
-          resp.write(JSON.stringify(response.bitly_settings));
-          resp.status(200).end();
-          break;
-        case "utm_settings":
-          resp.write(JSON.stringify(response.utm_settings));
-          resp.status(200).end();
-          break;
-        case "qr_settings":
-          console.log("QR Settings", response.qr_settings);
-          resp.write(JSON.stringify(response.qr_settings));
-          resp.status(200).end();
-          break;
-        default:
-          resp.write(JSON.stringify(response));
-          resp.status(200).end();
-          break;
-      }
-      async () => {
-        await prisma.$disconnect();
-      };
-    })
-    .catch(async (e) => {
-      console.error(e);
-      await prisma.$disconnect();
-      // process.exit(1);
-    });
-});
+app.post(
+  "/user-data",
+  express.json({ type: "application/json" }),
+  (req, resp) => {
+    const payload = JSON.parse(req.body);
+    console.log("User Data", payload.username);
+    console.log("Data Fetch: ", payload.data_fetch);
+    // resp.status(200).end();
+    const data = lookupUser(payload.username);
+    data
+      .then((response) => {
+        switch (payload.data_fetch) {
+          case "all":
+            resp.write(JSON.stringify(response));
+            resp.status(200).end();
+            break;
+          case "main_settings":
+            resp.write(JSON.stringify(response.main_settings));
+            resp.status(200).end();
+            break;
+          case "bitly_settings":
+            resp.write(JSON.stringify(response.bitly_settings));
+            resp.status(200).end();
+            break;
+          case "utm_settings":
+            const utm_settings = {
+              utm_campaign: response.utm_campaign,
+              utm_keyword: response.utm_keyword,
+              utm_content: response.utm_content,
+              utm_medium: response.utm_medium,
+              utm_source: response.utm_source,
+              utm_term: response.utm_term,
+            };
+            resp.write(JSON.stringify(utm_settings));
+            resp.status(200).end();
+            break;
+          case "qr_settings":
+            resp.write(JSON.stringify(response.qr_settings));
+            resp.status(200).end();
+            break;
+          case "user_settings":
+            resp.write(JSON.stringify(response));
+            resp.status(200).end();
+            break;
+          case "wifi_settings":
+            resp.write(JSON.stringify(response.wifi_settings));
+            resp.status(200).end();
+            break;
+          case "link_history":
+            resp.write(JSON.stringify(response.link_history));
+            resp.status(200).end();
+            break;
+          case "license_settings":
+            resp.write(JSON.stringify(response.licensing));
+            resp.status(200).end();
+            break;
+          default:
+            resp.write(JSON.stringify(response));
+            resp.status(200).end();
+            break;
+        }
+
+      })
+      .catch(async (e) => {
+        console.error(e);
+      });
+  }
+);
 
 /**
- * Update Main Settings in database
- */
-app.post("/update-main-settings", (req, resp) => {
-  const payload = req.body;
-  console.log("Update Main Settings", payload);
-  const data = updateMainSettings(payload);
-  data
-    .then((response) => {
-      console.log("User Data", response);
-      resp.write(JSON.stringify(response));
-      resp.status(204).end();
-      async () => {
-        await prisma.$disconnect();
-      };
-    })
-    .catch(async (e) => {
-      console.error(e);
-      await prisma.$disconnect();
-      // process.exit(1);
-    });
-});
-
-/**
- * Update bitly settings in database
- * @param {*} payload
- */
-app.post("/update-bitly-settings", (req, resp) => {
-  const payload = req.body;
-  console.log("Update Bitly Settings", payload);
-  const data = updateBitlySettings(payload);
-  data
-    .then((response) => {
-      console.log("User Data", response);
-      resp.write(JSON.stringify(response));
-      resp.status(204).end();
-      async () => {
-        await prisma.$disconnect();
-      };
-    })
-    .catch(async (e) => {
-      console.error(e);
-      await prisma.$disconnect();
-      // process.exit(1);
-    });
-});
-
-/**
- * Update UTM settings in database
- * @param {*} payload
- */
-app.post("/update-utm-settings", (req, resp) => {
-  const payload = req.body;
-  console.log("Update UTM Settings", payload);
-  const data = updateUTMSettings(payload);
-  data
-    .then((response) => {
-      console.log("User Data", response);
-      resp.write(JSON.stringify(response));
-      resp.status(204).end();
-      async () => {
-        await prisma.$disconnect();
-      };
-    })
-    .catch(async (e) => {
-      console.error(e);
-      await prisma.$disconnect();
-      // process.exit(1);
-    });
-});
-
-/**
- * Update QR Style settings in database
- * @param {*} payload
- */
-app.post("/update-qr-settings", (req, resp) => {
-  const payload = req.body;
-  console.log("Update QR Settings", payload);
-  const data = updateQRSettings(payload);
-  data
-    .then((response) => {
-      console.log("User Data", response);
-      resp.write(JSON.stringify(response));
-      resp.status(204).end();
-      async () => {
-        await prisma.$disconnect();
-      };
-    })
-    .catch(async (e) => {
-      console.error(e);
-      await prisma.$disconnect();
-      // process.exit(1);
-    });
-});
-/**
- * Create a user in the database
+ * Create a user in the app -- first Userfront, then the database /create-user
  * @param {*} payload
  * @returns
  * @throws
  */
-app.post("/create-user", (request, response) => {
-  const payload = request.body;
-  console.log("Create User", payload);
-  response.status(200).end();
-  addUserToDatabase(payload)
-    .then(async () => {
-      await prisma.$disconnect();
-    })
-    .catch(async (e) => {
-      console.error(e);
-      await prisma.$disconnect();
-      process.exit(1);
-    });
-});
+app.post(
+  "/create-user",
+  express.json({ type: "application/json" }),
+  (req, resp) => {
+    const payload = JSON.parse(req.body);
+    console.log("Create User", payload);
+    const found = lookupUserFunc(payload);
+    console.log("User Found", found);
+  }
+);
 
-const emailCustomerAboutFailedPayment = (session) => {
-  // TODO: fill me in
-  console.log("Emailing customer", session);
-};
-
+/**
+ * checkout a machine for a license
+ */
+app.post(
+  "/fetchMachine",
+  json.raw({ type: "application/json" }),
+  (req, resp) => {
+    const payload = JSON.parse(req.body);
+    console.log("Fetch Machine", payload);
+    const mData = getMachine(payload);
+    mData
+      .then((response) => {
+        console.log("Machine Data", response);
+        resp.write(JSON.stringify(response));
+        resp.status(200).end();
+      })
+      .catch(async (e) => {
+        console.error(e);
+        resp.status(500).end();
+      });
+    //     const data = lookupUser(payload.username);
+    // data
+    //   .then((response) => {
+    //     console.log("User Data", response);
+    //     resp.write(JSON.stringify(response));
+    //     resp.status(200).end();
+    //     async () => {
+    //       await prisma.$disconnect();
+    //     };
+    //   })
+    //   .catch(async (e) => {
+    //     console.error(e);
+    //     await prisma.$disconnect();
+    //     // process.exit(1);
+    //   });
+  });
 /**
  * Webhook handler for asynchronous payment events
  * @param {*} session - The Stripe session object
@@ -1265,14 +581,45 @@ app.post(
     const sig = request.headers["stripe-signature"];
 
     let event;
-
     try {
       event = stripe.webhooks.constructEvent(payload, sig, endpointSecret);
+      console.log("Webhook Event", event);
     } catch (err) {
+      console.log(`Webhook Error: ${err.message}`);
       return response.status(400).send(`Webhook Error: ${err.message}`);
     }
-
+    let subscription;
+    let status;
+    // Handle the event
     switch (event.type) {
+      case "customer.subscription.trial_will_end":
+        subscription = event.data.object;
+        status = subscription.status;
+        console.log(`Subscription status is ${status}. and will end`);
+        // Then define and call a method to handle the subscription trial ending.
+        // handleSubscriptionTrialEnding(subscription);
+        break;
+      case "customer.subscription.deleted":
+        subscription = event.data.object;
+        status = subscription.status;
+        console.log(`Subscription status is ${status}.`);
+        // Then define and call a method to handle the subscription deleted.
+        // handleSubscriptionDeleted(subscriptionDeleted);
+        break;
+      case "customer.subscription.created":
+        subscription = event.data.object;
+        status = subscription.status;
+        console.log(`Subscription status is ${status}.`);
+        // Then define and call a method to handle the subscription created.
+        // handleSubscriptionCreated(subscription);
+        break;
+      case "customer.subscription.updated":
+        subscription = event.data.object;
+        status = subscription.status;
+        console.log(`Subscription status is ${status}.`);
+        // Then define and call a method to handle the subscription update.
+        // handleSubscriptionUpdated(subscription);
+        break;
       case "checkout.session.completed": {
         const session = event.data.object;
         console.log("Session completed, awaiting payment", session);
@@ -1285,35 +632,31 @@ app.post(
         // you're still waiting for funds to be transferred from the customer's
         // account.
         if (session.payment_status === "paid") {
-          console.log("Session is already paid, fulfilling order", session);
+          console.log("Session is paid, fulfilling order", session);
 
-          gatherCustomerData(session);
+          // gatherCustomerData(session);
           fulfillOrder(session);
         }
 
         break;
       }
-
       case "checkout.session.async_payment_succeeded": {
         const session = event.data.object;
         console.log("Session async payment succeeded", session);
         // Fulfill the purchase...
         fulfillOrder(session);
-
         break;
       }
-
       case "checkout.session.async_payment_failed": {
         const session = event.data.object;
         console.log("Session async payment failed", session);
 
         // Send an email to the customer asking them to retry their order
         emailCustomerAboutFailedPayment(session);
-
+        response.status(200).redirect("/myAccount")
         break;
       }
     }
-
     response.status(200).end();
   }
 );
@@ -1420,6 +763,123 @@ app.post("/keygen-webhooks", async (req, res) => {
       // For events we don't care about, let Keygen know all is good.
       res.sendStatus(200);
   }
+});
+
+/**
+ * Update Main Settings in database
+ */
+app.post("/update-main-settings", (req, resp) => {
+  const payload = JSON.parse(req.body);
+  console.log("Update Main Settings", payload);
+  const data = updateMainSettings(payload);
+  data
+    .then((response) => {
+      console.log("User Data", response);
+      resp.write(JSON.stringify(response));
+      resp.status(204).end();
+      async () => {
+        await prisma.$disconnect();
+      };
+    })
+    .catch(async (e) => {
+      console.error(e);
+      await prisma.$disconnect();
+      // process.exit(1);
+    });
+});
+
+/**
+ * Update Main Settings in database
+ */
+app.post("/update-user-settings", (req, resp) => {
+  const payload = JSON.parse(req.body);
+  console.log("Update User Settings", payload);
+  const data = updateUserSettings(payload);
+  data
+    .then((response) => {
+      console.log("User Data", response);
+      resp.write(JSON.stringify(response));
+      resp.status(204).end();
+      async () => {
+        await prisma.$disconnect();
+      };
+    })
+    .catch(async (e) => {
+      console.error(e);
+      await prisma.$disconnect();
+      // process.exit(1);
+    });
+});
+/**
+ * Update bitly settings in database
+ * @param {*} payload
+ */
+app.post("/update-bitly-settings", (req, resp) => {
+  const payload = JSON.parse(req.body);
+  console.log("Update Bitly Settings", payload);
+  const data = updateBitlySettings(payload);
+  data
+    .then((response) => {
+      console.log("User Data", response);
+      resp.write(JSON.stringify(response));
+      resp.status(204).end();
+      async () => {
+        await prisma.$disconnect();
+      };
+    })
+    .catch(async (e) => {
+      console.error(e);
+      await prisma.$disconnect();
+      // process.exit(1);
+    });
+});
+
+/**
+ * Update UTM settings in database
+ * @param {*} payload
+ */
+app.post("/update-utm-settings", (req, resp) => {
+  const payload = JSON.parse(req.body);
+  console.log("Update UTM Settings", payload);
+  const data = updateUTMSettings(payload);
+  data
+    .then((response) => {
+      console.log("User Data", response);
+      resp.write(JSON.stringify(response));
+      resp.status(204).end();
+      async () => {
+        await prisma.$disconnect();
+      };
+    })
+    .catch(async (e) => {
+      console.error(e);
+      await prisma.$disconnect();
+      // process.exit(1);
+    });
+});
+
+/**
+ * Update QR Style settings in database
+ * @param {*} payload
+ */
+app.post("/update-qr-settings", (req, resp) => {
+  const payload = JSON.parse(req.body);
+  console.log("Update QR Settings", payload);
+  const data = updateQRSettings(payload);
+  data
+    .then((response) => {
+      console.log("User Data", response);
+      resp.write(JSON.stringify(response));
+      resp.status(204).end();
+      async () => {
+        await prisma.$disconnect();
+      };
+    })
+    .catch(async (e) => {
+      console.error(e);
+      await prisma.$disconnect();
+      // process.exit(1);
+    });
 });
 
 console.log(`Server running at http://localhost:4242/`);
