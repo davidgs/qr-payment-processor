@@ -3,215 +3,393 @@
 
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
 // schema.prisma
 // schema.prisma
 
 model User {
-  id                            Int          @id @default(autoincrement())
-  login                         String       @db.VarChar(255)
-  password                      String       @db.VarChar(255)
-  stipe_id                      String?     @db.VarChar(255)
-  first_name                    String?
-  last_name                     String?
-  created_at                    DateTime     @default(now()) @db.Timestamp(6)
-  updated_at                    DateTime?    @db.Timestamp(6)
-  deleted_at                    DateTime?    @db.Timestamp(6)
-  organization                  String?
-  address                       String?    @db.VarChar(255)
-  city                          String?     @db.VarChar(255)
-  state                         String?     @db.VarChar(25)
-  zip                           String?     @db.VarChar(25)
-  active                        Boolean?
-  confirmed                     Boolean?
-  email                         String      @db.VarChar(255)
-  confirmation_code             String?      @db.VarChar(255)
-  confirmation_code_expires_at  DateTime?
-  bitly_settings                BitlySettings?
-  licensing                     Licensing?
-  main_settings                 MainSettings?
-  utm_target                    UtmTarget?
-  utm_keyword                   UtmKeyword?
-  utm_campaign                  UtmCampaign?
-  utm_source                    UtmSource?
-  utm_medium                    UtmMedium?
-  utm_term                      UtmTerm?
-  utm_content                   UtmContent?
+  id                           Int            @id @default(autoincrement())
+  login                        String         @unique @db.VarChar(255)
+  stripe_id                    String        @db.VarChar(255) @default("")
+  userfront_id                 String?        @db.VarChar(255)
+  keygen_id                    String?        @db.VarChar(255)
+  first_name                   String?
+  last_name                    String?
+  created_at                   DateTime       @default(now()) @db.Timestamp(6)
+  updated_at                   DateTime?      @db.Timestamp(6)
+  deleted_at                   DateTime?      @db.Timestamp(6)
+  organization                 String?
+  address                      String?        @db.VarChar(255)
+  city                         String?        @db.VarChar(255)
+  state                        String?        @db.VarChar(25)
+  zip                          String?        @db.VarChar(25)
+  active                       Boolean        @default(true)
+  confirmed                    Boolean        @default(false)
+  email                        String         @db.VarChar(255)
+  confirmation_code            String?        @db.VarChar(255)
+  confirmation_code_expires_at DateTime?
+  bitly_settings               BitlySettings?
+  licensing                    Licensing?
+  qr_settings                  QrSettings?
+  main_settings                MainSettings?
+  utm_target                   UtmTarget?
+  utm_keyword                  UtmKeyword?
+  utm_campaign                 UtmCampaign?
+  utm_source                   UtmSource?
+  utm_medium                   UtmMedium?
+  utm_term                     UtmTerm?
+  utm_content                  UtmContent?
+  link_history                 History?
+  wifi_settings                WiFiSettings?
 }
 
 model BitlySettings {
-  id                  Int          @id @default(autoincrement())
-  use_value           Boolean?     @default(false)
-  label               String?
-  aria_label          String?
-  tooltip             String?
-  error               String?
-  bitly_token         String?
-  bitly_domain        String?
-  bitly_addr          String?
-  bitly_enabled       Boolean?     @default(false)
-  type                String?
-  created_at          DateTime     @default(now()) @db.Timestamp(6)
-  updated_at          DateTime?    @db.Timestamp(6)
-  deleted_at          DateTime?    @db.Timestamp(6)
-  user                User    @relation(fields: [bitly_id], references: [id])
-  bitly_id            Int @unique
+  id            Int       @id @default(autoincrement())
+  use_value     Boolean   @default(false)
+  label         String    @default("Shorten Link")
+  aria_label    String    @default("Shorten Link with Bitly")
+  tooltip       String    @default("Shorten Link with Bitly")
+  error         String    @default("No Bitly Token Found")
+  bitly_token   String    @db.VarChar(255)
+  bitly_domain  String    @db.VarChar(255)
+  bitly_addr    String    @default("https://api-ssl.bitly.com/v4/shorten")
+  bitly_enabled Boolean   @default(false)
+  type          String    @default("bitly")
+  created_at    DateTime  @default(now()) @db.Timestamp(6)
+  updated_at    DateTime? @db.Timestamp(6)
+  deleted_at    DateTime? @db.Timestamp(6)
+  user          User      @relation(fields: [bitly_id], references: [id])
+  bitly_id      Int       @unique
 }
 
 model UtmTarget {
-  id                  Int          @id @default(autoincrement())
-  use_value           Boolean
-  is_chooser          Boolean
-  show_name           Boolean
-  label               String
-  aria_label          String
-  tooltip             String
-  error               String
-  value               Json[]
-  created_at          DateTime     @default(now()) @db.Timestamp(6)
-  updated_at          DateTime?    @db.Timestamp(6)
-  deleted_at          DateTime?    @db.Timestamp(6)
-  user                User    @relation(fields: [target_id], references: [id])
-  target_id           Int @unique
+  id         Int       @id @default(autoincrement())
+  use_value  Boolean  @default(true)
+  is_chooser Boolean  @default(false)
+  show_name  Boolean  @default(true)
+  label      String @default("URL to encode")
+  aria_label String @default("This must be a valid URL")
+  tooltip    String @default("Complete URL to encode")
+  error      String @default("Please enter a valid URL")
+  value      Json[]
+  created_at DateTime  @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @db.Timestamp(6)
+  deleted_at DateTime? @db.Timestamp(6)
+  user       User      @relation(fields: [target_id], references: [id])
+  target_id  Int       @unique
 }
 
 model UtmContent {
-  id                  Int          @id @default(autoincrement())
-  use_value           Boolean
-  is_chooser          Boolean
-  show_name           Boolean
-  label               String
-  aria_label          String
-  tooltip             String
-  error               String
-  value               Json[]
-  created_at          DateTime     @default(now()) @db.Timestamp(6)
-  updated_at          DateTime?    @db.Timestamp(6)
-  deleted_at          DateTime?    @db.Timestamp(6)
-  user                User    @relation(fields: [content_id], references: [id])
-  content_id          Int @unique
+  id         Int       @id @default(autoincrement())
+  use_value  Boolean  @default(true)
+  is_chooser Boolean    @default(false)
+  show_name  Boolean  @default(true)
+  label      String   @default("Content")
+  aria_label String  @default("Content")
+  tooltip    String @default("Additional content to append to the link")
+  error      String @default("Please enter a valid content value")
+  value      Json[]
+  created_at DateTime  @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @db.Timestamp(6)
+  deleted_at DateTime? @db.Timestamp(6)
+  user       User      @relation(fields: [content_id], references: [id])
+  content_id Int       @unique
 }
 
 model UtmMedium {
-  id                  Int          @id @default(autoincrement())
-  use_value           Boolean
-  is_chooser          Boolean
-  show_name           Boolean
-  label               String
-  aria_label          String
-  tooltip             String
-  error               String
-  value               Json[]
-  created_at          DateTime     @default(now()) @db.Timestamp(6)
-  updated_at          DateTime?    @db.Timestamp(6)
-  deleted_at          DateTime?    @db.Timestamp(6)
-  user                User    @relation(fields: [medium_id], references: [id])
-  medium_id           Int @unique
+  id         Int       @id @default(autoincrement())
+  use_value  Boolean  @default(true)
+  is_chooser Boolean  @default(false)
+  show_name  Boolean  @default(true)
+  label      String @default("Referral Medium")
+  aria_label String @default("Referral medium")
+  tooltip    String @default("What kind of referral link is this? This is usually how you're distributing the link.")
+  error      String @default("Please choose a valid referral medium")
+  value      Json[]
+  created_at DateTime  @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @db.Timestamp(6)
+  deleted_at DateTime? @db.Timestamp(6)
+  user       User      @relation(fields: [medium_id], references: [id])
+  medium_id  Int       @unique
 }
 
 model UtmKeyword {
-  id                  Int          @id @default(autoincrement())
-  use_value           Boolean
-  is_chooser          Boolean
-  show_name           Boolean
-  label               String
-  aria_label          String
-  tooltip             String
-  error               String
-  value               Json[]
-  created_at          DateTime     @default(now()) @db.Timestamp(6)
-  updated_at          DateTime?    @db.Timestamp(6)
-  deleted_at          DateTime?    @db.Timestamp(6)
-  user                User    @relation(fields: [keyword_id], references: [id])
-  keyword_id          Int @unique
+  id         Int       @id @default(autoincrement())
+  use_value  Boolean    @default(true)
+  is_chooser Boolean    @default(false)
+  show_name  Boolean    @default(true)
+  label      String   @default("Keywords")
+  aria_label String   @default("Add any additional keywords")
+  tooltip    String   @default("Additional keywords to append to the link")
+  error      String   @default("Please enter a valid Keyword")
+  value      Json[]
+  created_at DateTime  @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @db.Timestamp(6)
+  deleted_at DateTime? @db.Timestamp(6)
+  user       User      @relation(fields: [keyword_id], references: [id])
+  keyword_id Int       @unique
 }
 
 model UtmCampaign {
-  id                  Int          @id @default(autoincrement())
-  use_value           Boolean
-  is_chooser          Boolean
-  show_name           Boolean
-  label               String
-  aria_label          String
-  tooltip             String
-  error               String
-  value               Json[]
-  created_at          DateTime     @default(now()) @db.Timestamp(6)
-  updated_at          DateTime?    @db.Timestamp(6)
-  deleted_at          DateTime?    @db.Timestamp(6)
-  user                User    @relation(fields: [campaign_id], references: [id])
-  campaign_id         Int @unique
+  id          Int       @id @default(autoincrement())
+  use_value   Boolean   @default(true)
+  is_chooser  Boolean   @default(false)
+  show_name   Boolean   @default(true)
+  label       String    @default("Campaign")
+  aria_label  String    @default("Campaign Name")
+  tooltip     String    @default("Enter a campaign name")
+  error       String    @default("Please enter a valid campaign name")
+  value       Json[]
+  created_at  DateTime  @default(now()) @db.Timestamp(6)
+  updated_at  DateTime? @db.Timestamp(6)
+  deleted_at  DateTime? @db.Timestamp(6)
+  user        User      @relation(fields: [campaign_id], references: [id])
+  campaign_id Int       @unique
 }
 
 model UtmSource {
-  id                  Int          @id @default(autoincrement())
-  use_value           Boolean
-  is_chooser          Boolean
-  show_name           Boolean
-  label               String
-  aria_label          String
-  tooltip             String
-  error               String
-  value               Json[]
-  created_at          DateTime     @default(now()) @db.Timestamp(6)
-  updated_at          DateTime?    @db.Timestamp(6)
-  deleted_at          DateTime?    @db.Timestamp(6)
-  user                User    @relation(fields: [source_id], references: [id])
-  source_id           Int @unique
+  id         Int       @id @default(autoincrement())
+  use_value  Boolean    @default(true)
+  is_chooser Boolean    @default(false)
+  show_name  Boolean    @default(true)
+  label      String     @default("Referral Source")
+  aria_label String     @default("Referral Source")
+  tooltip    String     @default("Where will you be posting this link?")
+  error      String     @default("Please enter a valid referral source")
+  value      Json[]
+  created_at DateTime  @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @db.Timestamp(6)
+  deleted_at DateTime? @db.Timestamp(6)
+  user       User      @relation(fields: [source_id], references: [id])
+  source_id  Int       @unique
 }
 
 model UtmTerm {
-  id                  Int          @id @default(autoincrement())
-  use_value           Boolean
-  is_chooser          Boolean
-  show_name           Boolean
-  label               String
-  aria_label          String
-  tooltip             String
-  error               String
-  value               Json[]
-  created_at          DateTime     @default(now()) @db.Timestamp(6)
-  updated_at          DateTime?    @db.Timestamp(6)
-  deleted_at          DateTime?    @db.Timestamp(6)
-  user                User    @relation(fields: [term_id], references: [id])
-  term_id             Int @unique
+  id         Int       @id @default(autoincrement())
+  use_value  Boolean    @default(true)
+  is_chooser Boolean    @default(false)
+  show_name  Boolean  @default(true)
+  label      String   @default("Term")
+  aria_label String   @default("What's the Campaign Term?")
+  tooltip    String   @default("What's the Campaign Term?")
+  error      String   @default("Please choose a valid Term")
+  value      Json[]
+  created_at DateTime  @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @db.Timestamp(6)
+  deleted_at DateTime? @db.Timestamp(6)
+  user       User      @relation(fields: [term_id], references: [id])
+  term_id    Int       @unique
 }
+
 model Licensing {
-  id                  Int          @id @default(autoincrement())
-  cust_id            String?   @db.VarChar(255)
-  license_type        String?
-  license_key         String?
-  active              Boolean?    @default(false)
-  confirmed           Boolean?    @default(false)
-  expire_date         DateTime?
-  created_at          DateTime     @default(now()) @db.Timestamp(6)
-  updated_at          DateTime?    @db.Timestamp(6)
-  deleted_at          DateTime?    @db.Timestamp(6)
-  user                User    @relation(fields: [license_id], references: [id])
-  license_id          Int @unique
+  id           Int       @id @default(autoincrement())
+  cust_id      String?   @db.VarChar(255)
+  license_type String?    @default("free")
+  license_key  String?    @db.VarChar(255)
+  license_status String?  @default("no-license")
+  active       Boolean?  @default(false)
+  confirmed    Boolean?  @default(false)
+  expire_date  DateTime? @db.Timestamp(6)
+  created_at   DateTime  @default(now()) @db.Timestamp(6)
+  updated_at   DateTime? @db.Timestamp(6)
+  deleted_at   DateTime? @db.Timestamp(6)
+  user         User      @relation(fields: [license_id], references: [id])
+  license_id   Int       @unique
 }
 
 model MainSettings {
-  id                  Int          @id @default(autoincrement())
-  brand_image         String?
-  brand_height        Int?
-  brand_width         Int?
-  brand_opacity       Float?
-  form_type           String?
-  sidebar             String?
-  first_run           Boolean?     @default(false)
-  created_at          DateTime     @default(now()) @db.Timestamp(6)
-  updated_at          DateTime?    @db.Timestamp(6)
-  deleted_at          DateTime?    @db.Timestamp(6)
-  user                User    @relation(fields: [main_id], references: [id])
-  main_id             Int @unique
+  id            Int       @id @default(autoincrement())
+  brand_image   String?   @default("")
+  brand_height  Int?      @default(60)
+  brand_width   Int?      @default(60)
+  brand_opacity Float?    @default(1.0)
+  form_type     String?   @default("simple")
+  dark          Boolean?  @default(false)
+  created_at    DateTime  @default(now()) @db.Timestamp(6)
+  updated_at    DateTime? @db.Timestamp(6)
+  deleted_at    DateTime? @db.Timestamp(6)
+  user          User      @relation(fields: [main_id], references: [id])
+  main_id       Int       @unique
+}
+
+model QrSettings {
+  id                         Int           @id @default(autoincrement())
+  value                      String     @default("")
+  ec_level                   ec_values     @default(M)
+  enable_CORS                Boolean       @default(true)
+  size                       Int           @default(220)
+  quiet_zone                 Int           @default(10)
+  bg_color                   String        @default("#ffffff")
+  fg_color                   String        @default("#000000")
+  logo_image                 String?       @default("")
+  logo_width                 Int           @default(60)
+  logo_height                Int           @default(60)
+  logo_opacity               Float         @default(1)
+  remove_qr_code_behind_logo Boolean       @default(true)
+  logo_padding               Int           @default(0)
+  logo_padding_style         padding_style @default(square)
+  top_l_eye_radius           Int[]         @default([0, 0, 0, 0])
+  top_r_eye_radius           Int[]         @default([0, 0, 0, 0])
+  bottom_l_eye_radius        Int[]         @default([0, 0, 0, 0])
+  eye_color                  String        @default("#000000")
+  qr_style                   qr_style      @default(squares)
+  style                      StyleType?
+  qr_type                    qr_image_type @default(png)
+  x_parent                   Boolean       @default(false)
+  created_at                 DateTime      @default(now()) @db.Timestamp(6)
+  updated_at                 DateTime?     @db.Timestamp(6)
+  qr_id                      Int           @unique
+  user                       User          @relation(fields: [qr_id], references: [id])
+}
+
+model StyleType {
+  id          Int       @id @default(autoincrement())
+  height       String    @default("100%")
+  width       String    @default("100%")
+  qr_settings QrSettings @relation(fields: [style_id], references: [id])
+  style_id    Int       @unique
+}
+model WiFiSettings {
+  id          Int       @id @default(autoincrement())
+  ssid        WiFiSSIDFields?
+  password    WiFiPasswordFields?
+  encryption  WiFiEncryptionFields?
+  hidden      WiFiHiddenFields?
+  created_at  DateTime  @default(now()) @db.Timestamp(6)
+  updated_at  DateTime? @db.Timestamp(6)
+  deleted_at  DateTime? @db.Timestamp(6)
+  user        User      @relation(fields: [wifi_id], references: [id])
+  wifi_id     Int       @unique
+}
+
+model WiFiSSIDFields {
+  id          Int       @id @default(autoincrement())
+  label       String   @default("SSID")
+  tooltip     String  @default("The name of the WiFi network")
+  aria_label  String  @default("Enter the name of the WiFi network")
+  error       String  @default("Please enter a valid SSID")
+  value       String  @default("")
+  wifi_settings WiFiSettings @relation(fields: [ssid_id], references: [id])
+  ssid_id     Int       @unique
+}
+
+model WiFiPasswordFields {
+  id          Int       @id @default(autoincrement())
+  label       String    @default("Password")
+  tooltip     String    @default("The password for the network")
+  aria_label  String    @default("The password for the network")
+  error       String    @default("Please enter a valid password")
+  value       String    @default("")
+  wifi_settings WiFiSettings @relation(fields: [password_id], references: [id])
+  password_id Int       @unique
+}
+
+model WiFiEncryptionFields {
+  id          Int       @id @default(autoincrement())
+  label       String    @default("Encryption")
+  tooltip     String    @default("The encryption type for the network")
+  aria_label  String    @default("The encryption type for the network")
+  error       String    @default("Please choose a valid encryption type")
+  value       enc_type  @default(WPA2)
+  wifi_settings WiFiSettings @relation(fields: [encryption_id], references: [id])
+  encryption_id Int       @unique
+}
+
+model WiFiHiddenFields {
+  id          Int       @id @default(autoincrement())
+  label       String    @default("Hidden Network")
+  tooltip     String    @default("Is this a hidden network?")
+  aria_label  String    @default("Is this a hidden network?")
+  error       String    @default("Please choose a valid option")
+  value       Boolean   @default(false)
+  wifi_settings WiFiSettings @relation(fields: [hidden_id], references: [id])
+  hidden_id   Int       @unique
+}
+model History {
+  id          Int      @id @default(autoincrement())
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+  updated_at  DateTime? @db.Timestamp(6)
+  deleted_at  DateTime? @db.Timestamp(6)
+  user        User     @relation(fields: [history_id], references: [id])
+  utm_links   Json[]
+  wifi_links  Json[]
+  history_id  Int @unique
+}
+
+// model UTMLink {
+//   id         Int      @id @default(autoincrement())
+//   utm_target  String @default("")
+//   utm_campaign String?
+//   utm_source  String?
+//   utm_medium  String?
+// //   utm_term    String?
+//   utm_content String?
+//   utm_keyword String?
+//   long_link   String?
+//   short_link  String?
+//   uuid        String?
+//   link_id     Int     @unique
+//   history     History @relation(fields: [link_id], references: [id])
+// }
+
+// model WiFiLink {
+//   id        Int      @id @default(autoincrement())
+//   ssid      String?
+//   password  String?
+//   encryption enc_type?
+//   hidden    Boolean?
+//   uuid      String?
+//   link_id   Int
+// //   link_history History @relation(fields: [link_id], references: [id])
+// }
+
+enum enc_type {
+  nopass
+  WEP
+  WPA
+  WPA2
+}
+
+
+enum qr_style {
+  squares
+  dots
+}
+
+enum padding_style {
+  square
+  circle
+}
+
+enum qr_image_type {
+  svg
+  png
+  jpg
+}
+
+enum ec_values {
+  L
+  M
+  Q
+  H
+}
+
+enum style_type {
+  normal
+  rounded
+  rounded_eyes
+  rounded_corners
+  sharp
+  sharp_eyes
+  sharp_corners
 }
 
 // Add foreign key relationships
 // ...
-

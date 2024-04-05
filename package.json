@@ -7,12 +7,19 @@
   "author": "David G. Simmons <santafen@mac.com>",
   "license": "MIT",
   "dependencies": {
-    "@prisma/client": "5.9.1",
+    "@prisma/client": "^5.12.0",
+    "@userfront/core": "^0.6.8",
+    "axios": "^1.6.7",
     "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
     "express": "^4.18.2",
-    "prisma": "^5.9.1",
+    "nodemailer": "^6.9.13",
+    "openssl": "^2.0.0",
+    "prisma": "^5.12.0",
+    "react-qrcode-logo": "^2.9.0",
+    "smtp-client": "^0.4.0",
     "stripe": "^14.14.0",
-    "typescript": "^5.3.3",
+    "typescript": "^5.4.3",
     "uuidv4": "^6.2.13"
   },
   "devDependencies": {
