@@ -17,7 +17,7 @@ datasource db {
 model User {
   id                           Int            @id @default(autoincrement())
   login                        String         @unique @db.VarChar(255)
-  stripe_id                    String?        @db.VarChar(255)
+  stripe_id                    String        @db.VarChar(255) @default("")
   userfront_id                 String?        @db.VarChar(255)
   keygen_id                    String?        @db.VarChar(255)
   first_name                   String?
@@ -193,10 +193,10 @@ model Licensing {
   cust_id      String?   @db.VarChar(255)
   license_type String?    @default("free")
   license_key  String?    @db.VarChar(255)
-  license_status String?  @default("nolicense")
+  license_status String?  @default("no-license")
   active       Boolean?  @default(false)
   confirmed    Boolean?  @default(false)
-  expire_date  DateTime?
+  expire_date  DateTime? @db.Timestamp(6)
   created_at   DateTime  @default(now()) @db.Timestamp(6)
   updated_at   DateTime? @db.Timestamp(6)
   deleted_at   DateTime? @db.Timestamp(6)

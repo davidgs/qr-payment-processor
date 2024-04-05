@@ -12,7 +12,7 @@ function generatePass() {
   const str =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
     "abcdefghijklmnopqrstuvwxyz0123456789@#$-_&*!%?";
-  for (let i = 1; i <= 10; i++) {
+  for (let i = 1; i <= 8; i++) {
     pass += str.charAt(Math.floor(Math.random() * str.length + 1));
   }
   return pass;
@@ -38,7 +38,6 @@ async function createUserfrontUser(payload) {
     // redirect: "/custom-path"
   })
     .then((response) => {
-      console.log("Userfront User Created", response);
       return response;
     })
     .catch((error) => {
@@ -46,6 +45,7 @@ async function createUserfrontUser(payload) {
       return error;
     });
   console.log("Userfront User Created", u);
+  u.password = payload.password;
   return u;
 }
 

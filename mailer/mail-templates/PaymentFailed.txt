@@ -1,0 +1,28 @@
+Thanks for trying out QR Builder. We’ve pulled together some information and resources to help you get started.
+
+[QR Builder](https://qr-builder.io)
+
+******************
+Hello, {{ .Name}}
+******************
+
+Thanks for being a QR Builder customer. Unfortunately it appears as though your payment for your subscription has failed.
+
+Here is your payment information.
+
+Card Type: {{ .Card }}
+Card ending in: {{ .Card_number }}
+Reason: {{ .Error }}
+
+Please update your payment information as soon as possible.
+
+If you have any questions, feel free to email our customer success team ( help@qr-builder.io ). (We're usually lightning quick at replying.).
+
+Thanks,
+David G. Simmons and the QR Builder team
+
+
+
+QR Builder is open source and licensed under the MIT license. The source code is available on GitHub at:
+https://github.com/davidgs/link-maker
+QR Builder is built by David G. Simmons

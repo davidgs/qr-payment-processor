@@ -1,0 +1,41 @@
+Thanks for trying out QR Builder. We’ve pulled together some information and resources to help you get started.
+
+[QR Builder](https://qr-builder.io)
+
+******************
+Welcome, {{ .Name}}!
+******************
+
+Thanks for trying QR Builder. We’re thrilled to have you on board. To get the most out of QR
+Builder, login to your account:
+
+Do this Next ( {{ .Action_url }} )
+
+For reference, here's your login information:
+
+Login Page: https://qr-builder.io/login
+
+Username: {{ .Username }}
+
+Password: {{ .Password }}
+
+You've started a {{ .Trial_length}} day trial. You can upgrade to a paying account or cancel any time.
+
+Trial Start Date: {{ .Start_date }}
+
+Trial End Date: {{ .End_date }}
+
+If you have any questions, feel free to email our customer success team ( help@qr-builder.io ). (We're usually lightning quick at replying.).
+
+Thanks,
+David G. Simmons and the QR Builder team
+
+P.S. Need immediate help getting started? Check out our help documentation ( https://qr-builder.io/docs ). Or, just reply to this email, the QR Builder support team is always ready to help!
+
+If you’re having trouble with the button above, copy and paste the URL below into your web browser.
+
+{{ .Action_url }}
+
+QR Builder is open source and licensed under the MIT license. The source code is available on GitHub at:
+https://github.com/davidgs/link-maker
+QR Builder is built by David G. Simmons

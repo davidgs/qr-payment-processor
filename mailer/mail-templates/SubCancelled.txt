@@ -1,0 +1,22 @@
+Thanks for trying out QR Builder. We’ve pulled together some information and resources to help you get started.
+
+[QR Builder](https://qr-builder.io)
+
+******************
+Goodbye, {{ .Name}} 😕
+******************
+
+Thanks for being a QR Builder customer. We're sorry to see you go. We hope you'll come back soon! If you have any feedback on why you're leaving, we'd love to hear it. Just reply to this email and let us know.
+
+Your account will remain active on https://qr-builder.io/ under the Free tier. If you'd like your account details deleted entirely, please reply to this email and let us know.
+
+If you have any questions, feel free to email our customer success team ( help@qr-builder.io ). (We're usually lightning quick at replying.).
+
+Thanks,
+David G. Simmons and the QR Builder team
+
+
+
+QR Builder is open source and licensed under the MIT license. The source code is available on GitHub at:
+https://github.com/davidgs/link-maker
+QR Builder is built by David G. Simmons
