@@ -755,7 +755,7 @@ async function lookupUserFunc(resp, payload) {
  * @returns
  */
 app.post(
-  "/user-data",
+  "/api/user-data",
   express.json({ type: "application/json" }),
   (req, resp) => {
     const payload = req.body;
@@ -830,7 +830,7 @@ app.post(
  * @throws
  */
 app.post(
-  "/create-user",
+  "/api/create-user",
   express.json({ type: "application/json" }),
   (req, resp) => {
     const payload = req.body;
@@ -847,7 +847,7 @@ app.post(
  * @throws
  */
 app.post(
-  "/delete-license",
+  "/api/delete-license",
   express.json({ type: "application/json" }),
   (req, resp) => {
     const payload = req.body;
@@ -870,7 +870,7 @@ app.post(
  * checkout a machine for a license
  */
 app.post(
-  "/fetchMachine",
+  "/api/fetchMachine",
   json.raw({ type: "application/json" }),
   (req, resp) => {
     const payload = req.body;
@@ -907,7 +907,7 @@ app.post(
  * Webhook handler for asynchronous payment events
  * @param {*} session - The Stripe session object
  */
-app.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
+app.post("/api/webhook", express.raw({ type: "application/json" }), (req, res) => {
   const sig = req.headers["stripe-signature"];
   let event;
   try {
@@ -1049,7 +1049,7 @@ app.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
  * Webhook handler for subscription events
  *
  */
-app.post("/keygen-webhooks", async (req, res) => {
+app.post("/api/keygen-webhooks", async (req, res) => {
   const {
     data: { id: keygenEventId },
   } = req.body;
@@ -1152,7 +1152,7 @@ app.post("/keygen-webhooks", async (req, res) => {
 /**
  * Update Main Settings in database
  */
-app.post("/update-main-settings", (req, resp) => {
+app.post("/api/update-main-settings", (req, resp) => {
   const payload = req.body;
   console.log("Update Main Settings", payload);
   const data = updateMainSettings(payload);
@@ -1175,7 +1175,7 @@ app.post("/update-main-settings", (req, resp) => {
 /**
  * Update Main Settings in database
  */
-app.post("/update-user-settings", (req, resp) => {
+app.post("/api/update-user-settings", (req, resp) => {
   const payload = req.body;
   console.log("Update User Settings", payload);
   const data = updateUserSettings(payload);
@@ -1198,7 +1198,7 @@ app.post("/update-user-settings", (req, resp) => {
  * Update bitly settings in database
  * @param {*} payload
  */
-app.post("/update-bitly-settings", (req, resp) => {
+app.post("/api/update-bitly-settings", (req, resp) => {
   const payload = req.body;
   console.log("Update Bitly Settings", payload);
   const data = updateBitlySettings(payload);
@@ -1222,7 +1222,7 @@ app.post("/update-bitly-settings", (req, resp) => {
  * Update UTM settings in database
  * @param {*} payload
  */
-app.post("/update-utm-settings", (req, resp) => {
+app.post("/api/update-utm-settings", (req, resp) => {
   const payload = req.body;
   console.log("Update UTM Settings", payload);
   const data = updateUTMSettings(payload);
@@ -1246,7 +1246,7 @@ app.post("/update-utm-settings", (req, resp) => {
  * Update QR Style settings in database
  * @param {*} payload
  */
-app.post("/update-qr-settings", (req, resp) => {
+app.post("/api/update-qr-settings", (req, resp) => {
   const payload = req.body;
   console.log("Update QR Settings", payload);
   const data = updateQRSettings(payload);
