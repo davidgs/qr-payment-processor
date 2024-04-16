@@ -720,7 +720,6 @@ async function lookupUserFunc(resp, payload) {
   const f_data = await findUserfrontUser(payload, logger)
     .then((response) => {
       if (response) {
-        logger.log("Userfront User Found", response);
         return response;
       }
     })
@@ -729,7 +728,6 @@ async function lookupUserFunc(resp, payload) {
       resp.status(500).end();
       return null;
     });
-  logger.log("Userfront search result", f_data);
   // if no Userfront user, create one.
   let userUUID = f_data.totalCount > 0 ? f_data.results[0].userUuid : "";
   let c_data;
@@ -1273,7 +1271,7 @@ app.post(
   express.json({ type: "application/json" }),
   (req, resp) => {
     const payload = req.body;
-    logger.log("Create User", payload);
+    logger.log("Create User", {...payload, password: "********"});
     const found = lookupUserFunc(resp, payload);
   }
 );
