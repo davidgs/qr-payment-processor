@@ -45,7 +45,7 @@ export async function sendCancellationMail(payload, logger) {
   }
 }
 export async function sendWelcomeMail(data, logger) {
-  logger.log("Sending email", data);
+  logger.log("Sending email", {...data, password: "REDACTED"});
   try {
     const response = await axios
       .post("http://localhost:4343/sendWelcomeMail", data)
@@ -67,7 +67,7 @@ export async function sendWelcomeMail(data, logger) {
 export async function sendFailMail(data, logger) {
   try {
     const response = await axios
-      .post("http://localhost:4343/sendFailMail", data)
+      .post("http://localhost:4343/sendFailMail", {...data, password: "REDACTED"})
       .then((resp) => {
         logger.log("Email sent", resp.data);
         return resp;
