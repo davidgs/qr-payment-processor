@@ -5,8 +5,7 @@ const prisma = new PrismaClient();
 /**
  * Update Bitly Settings in database
  */
-export async function updateBitlySettings(payload) {
-  console.log("Updating Bitly Settings", payload);
+export async function updateBitlySettings(payload, logger) {
   const updateUser = await prisma.user
     .update({
       where: {
@@ -63,11 +62,10 @@ export async function updateBitlySettings(payload) {
       },
     })
     .then((user) => {
-      console.log("User Updated", user);
       return user;
     })
     .catch((error) => {
-      console.log("Error: ", error);
+      logger.log("Error: ", error);
       return error;
     });
   return updateUser;
@@ -76,8 +74,7 @@ export async function updateBitlySettings(payload) {
  * Update Main Settings in database
  * @param {*} payload
  */
-export async function updateMainSettings(payload) {
-  console.log("Updating Main Settings", payload);
+export async function updateMainSettings(payload, logger) {
   const updateUser = await prisma.user
     .update({
       where: {
@@ -119,11 +116,10 @@ export async function updateMainSettings(payload) {
       },
     })
     .then((user) => {
-      console.log("User Updated", user);
       return user;
     })
     .catch((error) => {
-      console.log("Error: ", error);
+      logger.log("Error: ", error);
       return error;
     });
   return updateUser;
@@ -133,8 +129,7 @@ export async function updateMainSettings(payload) {
  * Update User Settings in database
  * @param {*} payload
  */
-export async function updateUserSettings(payload) {
-  console.log("Updating User Settings", payload);
+export async function updateUserSettings(payload, logger) {
   const updateUser = await prisma.user
     .update({
       where: {
@@ -158,11 +153,10 @@ export async function updateUserSettings(payload) {
       },
     })
     .then((user) => {
-      console.log("User Updated", user);
       return user;
     })
     .catch((error) => {
-      console.log("Error: ", error);
+      logger.log("Error: ", error);
       return error;
     });
   return updateUser;
@@ -171,8 +165,7 @@ export async function updateUserSettings(payload) {
  * Update UTM Settings in database
  * @param {*} payload
  */
-export async function updateUTMSettings(payload) {
-  console.log("Updating UTM Settings", payload);
+export async function updateUTMSettings(payload, logger) {
   const updateUser = await prisma.user
     .update({
       where: {
@@ -430,11 +423,10 @@ export async function updateUTMSettings(payload) {
       },
     })
     .then((user) => {
-      console.log("User Updated", user);
       return user;
     })
     .catch((error) => {
-      console.log("Error: ", error);
+      logger.log("Error: ", error);
       return error;
     });
   return updateUser;
@@ -443,8 +435,7 @@ export async function updateUTMSettings(payload) {
 /**
  * Update QR Settings in database
  */
-export async function updateQRSettings(payload) {
-  console.log("Updating QR Settings", payload);
+export async function updateQRSettings(payload, logger) {
   const updateUser = await prisma.user
     .update({
       where: {
@@ -534,11 +525,10 @@ export async function updateQRSettings(payload) {
       },
     })
     .then((user) => {
-      console.log("User Updated", user);
       return user;
     })
     .catch((error) => {
-      console.log("Error: ", error);
+      logger.log("Error: ", error);
       return error;
     });
   return updateUser;
@@ -547,14 +537,14 @@ export async function updateQRSettings(payload) {
 /**
  * update License settings in database
  */
-export async function updateLicenseSettings(payload) {
-  console.log("Updating License Settings", payload);
+export async function updateLicenseSettings(payload, logger) {
   const updateUser = await prisma.user
     .update({
       where: {
         login: payload.username,
       },
       data: {
+        keygen_id: payload.settings.cust_id,
         updated_at: new Date(),
         licensing: {
           upsert: {
@@ -565,6 +555,8 @@ export async function updateLicenseSettings(payload) {
               license_key: payload.settings.license_key,
               license_type: payload.settings.license_type,
               expire_date: payload.settings.expire_date,
+              updated_at: payload.settings.updated_at,
+              machines: payload.settings.machines,
             },
             update: {
               cust_id: payload.settings.cust_id,
@@ -573,6 +565,8 @@ export async function updateLicenseSettings(payload) {
               license_key: payload.settings.license_key,
               license_type: payload.settings.license_type,
               expire_date: payload.settings.expire_date,
+              updated_at: payload.settings.updated_at,
+              machines: payload.settings.machines,
             },
           },
           update: {
@@ -582,6 +576,8 @@ export async function updateLicenseSettings(payload) {
             license_key: payload.settings.license_key,
             license_type: payload.settings.license_type,
             expire_date: payload.settings.expire_date,
+            updated_at: payload.settings.updated_at,
+            machines: payload.settings.machines,
           },
         },
       },
@@ -590,11 +586,10 @@ export async function updateLicenseSettings(payload) {
       },
     })
     .then((user) => {
-      console.log("User Updated", user);
       return user;
     })
     .catch((error) => {
-      console.log("Error: ", error);
+      logger.log("Error: ", error);
       return error;
     });
   return updateUser;
@@ -603,9 +598,9 @@ export async function updateLicenseSettings(payload) {
  *
  * @param {*} session
  */
-export async function addUserToDatabase(session) {
+export async function addUserToDatabase(session, logger) {
   const username = `${session.customer_details.name.toLowerCase().replace(" ", "_")}`;
-  console.log("Creating User", username, session.customer_details.name, session.stripe_id)
+  logger.log("Creating User", username, session.customer_details.name, session.stripe_id)
   const data = {
     login: username,
     stripe_id: session.stripe_id || "",
@@ -837,11 +832,9 @@ export async function addUserToDatabase(session) {
       return response;
     })
     .catch(async (e) => {
-      console.error(e);
+      logger.error(e);
       await prisma.$disconnect();
-      process.exit(1);
     });
-  console.log("User Created", user);
   return user;
 }
 
@@ -850,10 +843,9 @@ export async function addUserToDatabase(session) {
  * @param string payload
  * @returns
  */
-export async function lookupUser(payload) {
-  console.log("Looking up user", payload);
+export async function lookupUser(payload, logger) {
   const username = payload;
-  console.log("Looking up username", username);
+  logger.log("Looking up username", username);
   let localUserExists = false;
   const exists = await prisma.user
     .findUnique({
@@ -880,14 +872,13 @@ export async function lookupUser(payload) {
     .then((user) => {
       if (user) {
         localUserExists = true;
-        console.log("User Exists", username);
       } else {
-        console.log("User Does Not Exist");
+        logger.log("User Does Not Exist");
       }
       return user;
     })
     .catch((error) => {
-      console.log("Error: ", error);
+      logger.log("Error: ", error);
       return error;
     });
   async () => {
@@ -905,8 +896,8 @@ export async function lookupUser(payload) {
  * @param string payload
  * @returns
  */
-export async function lookupUserByEmail(payload) {
-  console.log("Looking up user", payload.username, payload.email);
+export async function lookupUserByEmail(payload, logger) {
+  logger.log("Looking up user", payload.username, payload.email);
   let localUserExists = false;
   const exists = await prisma.user
     .findUnique({
@@ -921,11 +912,10 @@ export async function lookupUserByEmail(payload) {
     })
     .then((user) => {
       localUserExists = user !== null;
-      console.log("User Exists", user, payload.email);
       return user;
     })
     .catch((error) => {
-      console.log("Error: ", error);
+      logger.log("Error: ", error);
       return error;
     });
   if (localUserExists) {
@@ -940,8 +930,7 @@ export async function lookupUserByEmail(payload) {
  * @param string payload
  * @returns
  */
-export async function lookupStripeCustomer(payload) {
-  console.log("Looking up customer", payload);
+export async function lookupStripeCustomer(payload, logger) {
   let localUserExists = false;
   const exists = await prisma.user
     .findMany({
@@ -955,11 +944,10 @@ export async function lookupStripeCustomer(payload) {
     })
     .then((user) => {
       localUserExists = user !== null;
-      console.log("User Exists", user, payload);
       return user;
     })
     .catch((error) => {
-      console.log("Error: ", error);
+      logger.log("Error: ", error);
       return error;
     });
   if (localUserExists) {
@@ -974,8 +962,7 @@ export async function lookupStripeCustomer(payload) {
  * @param string payload
  * @returns
  */
-export async function lookupKeygenUser(payload) {
-  console.log("Looking up user", payload);
+export async function lookupKeygenUser(payload, logger) {
   let localUserExists = false;
   const exists = await prisma.user
     .findMany({
@@ -989,16 +976,16 @@ export async function lookupKeygenUser(payload) {
     })
     .then((user) => {
       localUserExists = user !== null;
-      console.log("User Exists", user, payload);
       return user;
     })
     .catch((error) => {
-      console.log("Error: ", error);
+      logger.log("Error: ", error);
       return error;
     });
   if (localUserExists) {
     return exists;
   } else {
+    const kg = await createKeygenAccount(payload, logger);
     return null;
   }
 }

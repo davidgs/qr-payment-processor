@@ -23,8 +23,7 @@ function generatePass() {
  * @param {*} payload
  * @returns
  */
-async function createUserfrontUser(payload) {
-  console.log("Creating Userfront User", payload);
+async function createUserfrontUser(payload, logger) {
   if (!payload.password) {
     payload.password = generatePass();
   }
@@ -41,10 +40,9 @@ async function createUserfrontUser(payload) {
       return response;
     })
     .catch((error) => {
-      console.error("Error creating Userfront User", error);
+      logger.error("Error creating Userfront User", error);
       return error;
     });
-  console.log("Userfront User Created", u);
   u.password = payload.password;
   return u;
 }
@@ -54,8 +52,7 @@ async function createUserfrontUser(payload) {
  * @param {*} payload
  * @returns
  */
-async function findUserfrontUser(payload) {
-  console.log("Finding Userfront User", payload);
+async function findUserfrontUser(payload, logger) {
   const data = {
     order: "lastActiveAt_ASC",
     page: 1,
@@ -93,14 +90,12 @@ async function findUserfrontUser(payload) {
       // body: JSON.stringify(payload),
     })
     .then((response) => {
-      console.log("Userfront User response", response);
       return response;
     })
     .catch((error) => {
-      console.error("Error finding Userfront User", error);
+      logger.error("Error finding Userfront User", error);
       return error;
     });
-  console.log("Userfront User response", r);
   return r.data;
 }
 

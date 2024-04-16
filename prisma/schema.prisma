@@ -195,6 +195,7 @@ model Licensing {
   license_key  String?    @db.VarChar(255)
   license_status String?  @default("no-license")
   active       Boolean?  @default(false)
+  machines     String[]  @default([])
   confirmed    Boolean?  @default(false)
   expire_date  DateTime? @db.Timestamp(6)
   created_at   DateTime  @default(now()) @db.Timestamp(6)

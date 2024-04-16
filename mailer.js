@@ -18,72 +18,67 @@ import axios from "axios";
 //   prod_type: string;
 //   expire_date: string;
 // };
-export async function emailAccountDetails(payload) {
-  return sendWelcomeMail(payload);
+export async function emailAccountDetails(payload, logger) {
+  return sendWelcomeMail(payload, logger);
 }
 
-export async function sendSubDeletedEmail(payload) {
-  return sendCancellationMail(payload);
+export async function sendSubDeletedEmail(payload, logger) {
+  return sendCancellationMail(payload, logger);
 }
 
-export async function sendCancellationMail(payload) {
-  console.log("Sending email", payload);
+export async function sendCancellationMail(payload, logger) {
   try {
     const response = await axios
       .post("http://localhost:4343/sendCancelMail", payload)
       .then((resp) => {
-        console.log("Email sent", resp.data);
+        logger.log("Email sent", resp.data);
         return resp;
       })
       .catch((error) => {
-        console.error("Error sending email", error);
+        logger.error("Error sending email", error);
         return error;
       });
-    console.log("Email response: ", response.data);
     return response.data;
   } catch (error) {
-    console.error("Error generating Email:", error.message);
+    logger.error("Error generating Email:", error.message);
     throw new Error("Email Generation Failed");
   }
 }
-export async function sendWelcomeMail(data) {
-  console.log("Sending email", data);
+export async function sendWelcomeMail(data, logger) {
+  logger.log("Sending email", data);
   try {
     const response = await axios
       .post("http://localhost:4343/sendWelcomeMail", data)
       .then((resp) => {
-        console.log("Email sent", resp.data);
+        logger.log("Email sent", resp.data);
         return resp;
       })
       .catch((error) => {
-        console.error("Error sending email", error);
+        logger.error("Error sending email", error);
         return error;
       });
-    console.log("Email response: ", response.data);
     return response.data;
   } catch (error) {
-    console.error("Error generating Email:", error.message);
+    logger.error("Error generating Email:", error.message);
     throw new Error("Email Generation Failed");
   }
 }
 
-export async function sendFailMail(data) {
-  console.log("Sending email", data);
+export async function sendFailMail(data, logger) {
   try {
     const response = await axios
       .post("http://localhost:4343/sendFailMail", data)
       .then((resp) => {
-        console.log("Email sent", resp.data);
+        logger.log("Email sent", resp.data);
         return resp;
       })
       .catch((error) => {
-        console.error("Error sending email", error);
+        logger.error("Error sending email", error);
         return error;
       });
-    console.log("Email response: ", response.data);
     return response.data;
   } catch (error) {
-    console.error("Error generating Email:", error.message);
+    logger.error("Error generating Email:", error.message);
     throw new Error("Email Generation Failed");
   }
 }
