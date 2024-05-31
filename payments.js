@@ -715,7 +715,7 @@ const emailCustomerLoginDetails = (session) => {
  * @param {} resp
  * @param {*} payload
  */
-async function lookupUserFunc(resp, payload) {
+async function createNewUser(resp, payload) {
   // see if user is already in Userfront
   const f_data = await findUserfrontUser(payload, logger)
     .then((response) => {
@@ -725,13 +725,16 @@ async function lookupUserFunc(resp, payload) {
     })
     .catch(async (e) => {
       logger.error(e);
+      resp.write(JSON.stringify({ error: `User Account error ${e}` }));
       resp.status(500).end();
       return null;
     });
   // if no Userfront user, create one.
   let userUUID = f_data.totalCount > 0 ? f_data.results[0].userUuid : "";
+  logger.log("Userfront User Found ", f_data.totalCount > 0)
   let c_data;
   if (f_data.totalCount === 0) {
+    logger.log("Creating Userfront User");
     c_data = await createUserfrontUser(payload, logger)
       .then((response) => {
         return response;
@@ -807,6 +810,13 @@ async function lookupUserFunc(resp, payload) {
     license_key: "",
   };
   emailAccountDetails(mail_obj, logger);
+  resp.write(JSON.stringify({
+    result: "User Account created",
+    user: payload.username,
+    name: payload.name,
+    email: payload.email,
+   }));
+  resp.status(200).end();
 }
 
 async function verifyLicense(resp, payload) {
@@ -1272,7 +1282,7 @@ app.post(
   (req, resp) => {
     const payload = req.body;
     logger.log("Create User", {...payload, password: "********"});
-    const found = lookupUserFunc(resp, payload);
+    const found = createNewUser(resp, payload);
   }
 );
 

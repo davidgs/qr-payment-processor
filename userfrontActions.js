@@ -27,24 +27,43 @@ async function createUserfrontUser(payload, logger) {
   if (!payload.password) {
     payload.password = generatePass();
   }
-  Userfront.init(USERFRONT_TENANT);
-  const u = await Userfront.signup({
-    method: "password",
+  const pl = {
     email: payload.email,
-    password: payload.password,
     username: payload.name.replace(" ", "_").toLowerCase(),
     name: payload.name,
-    // redirect: "/custom-path"
-  })
-    .then((response) => {
-      return response;
+    password: payload.password,
+  };
+  console.log("pl", pl);
+  // const p = {
+  //   method: "password",
+  //   email: payload.email,
+  //   password: payload.password,
+  //   username: payload.name.replace(" ", "_").toLowerCase(),
+  //   name: payload.name,
+  //   redirect: "/custom-path",
+  // };
+  const r = await fetch(
+    `https://api.userfront.com/v0/tenants/${USERFRONT_TENANT}/users`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${USERFRONT_TOKEN}`,
+      },
+      body: JSON.stringify(pl),
+    }
+  )
+    .then((response) => response.json())
+    .then((data) => {
+      logger.log("Userfront User created", data);
+      return data;
     })
     .catch((error) => {
       logger.error("Error creating Userfront User", error);
       return error;
     });
-  u.password = payload.password;
-  return u;
+  r.password = payload.password;
+  return r;
 }
 
 /**
@@ -79,16 +98,37 @@ async function findUserfrontUser(payload, logger) {
       ],
     },
   };
-  const r = await axios.post(
-    `https://api.userfront.com/v0/tenants/${USERFRONT_TENANT}/users/find`, JSON.stringify(data),
-    {
-      // method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${USERFRONT_TOKEN}`,
-      },
-      // body: JSON.stringify(payload),
-    })
+  // const f = await fetch(
+  //   `https://api.userfront.com/v0/tenants/${USERFRONT_TENANT}/users/find`,
+  //   {
+  //     method: "POST",
+  //     headers: {
+  //       "Content-Type": "application/json",
+  //       Authorization: `Bearer ${USERFRONT_TOKEN}`,
+  //     },
+  //     body: JSON.stringify(data),
+  //   }
+  // )
+  //   .then((response) => {
+  //     return response.json();
+  //   })
+  //   .catch((error) => {
+  //     logger.error("Error finding Userfront User", error);
+  //     return error;
+  //   });
+  const r = await axios
+    .post(
+      `https://api.userfront.com/v0/tenants/${USERFRONT_TENANT}/users/find`,
+      JSON.stringify(data),
+      {
+        // method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${USERFRONT_TOKEN}`,
+        },
+        // body: JSON.stringify(payload),
+      }
+    )
     .then((response) => {
       return response;
     })
@@ -96,6 +136,7 @@ async function findUserfrontUser(payload, logger) {
       logger.error("Error finding Userfront User", error);
       return error;
     });
+  logger.log("Userfront User found", r.data);
   return r.data;
 }
 
